@@ -284,10 +284,15 @@ async function handleLogin(e) {
         applyRolePermissions();
         loadDataFromSheets();
       } else {
-        Swal.fire('Đăng nhập thất bại', data.message || 'Sai tên đăng nhập hoặc mật khẩu', 'error');
+        Swal.fire({
+          icon: 'error',
+          title: 'Đăng nhập thất bại',
+          text: data.message || 'Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!',
+          confirmButtonColor: '#3b82f6',
+          confirmButtonText: 'Thử lại'
+        });
       }
     } else {
-      Swal.close();
       const matchedUser = DEMO_USERS[u];
       if (matchedUser && matchedUser.MatKhau === p) {
         state.currentUser = {
@@ -300,12 +305,23 @@ async function handleLogin(e) {
         applyRolePermissions();
         loadDemoData();
       } else {
-        Swal.fire('Sai tài khoản', 'Tài khoản thử nghiệm: admin, thukho, hoặc nhanvien (Mật khẩu: 123456)', 'error');
+        Swal.fire({
+          icon: 'error',
+          title: 'Đăng nhập thất bại',
+          text: 'Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!',
+          confirmButtonColor: '#3b82f6',
+          confirmButtonText: 'Thử lại'
+        });
       }
     }
   } catch (err) {
-    Swal.close();
-    Swal.fire('Lỗi mạng', 'Không thể kết nối đến máy chủ đăng nhập: ' + err.message, 'error');
+    Swal.fire({
+      icon: 'error',
+      title: 'Lỗi kết nối',
+      text: 'Không thể kết nối đến máy chủ đăng nhập: ' + err.message,
+      confirmButtonColor: '#3b82f6',
+      confirmButtonText: 'Đóng'
+    });
   }
 }
 
@@ -1749,13 +1765,18 @@ function renderUserManagerTable() {
         </span>
       </td>
       <td class="px-4 py-3 text-right">
-        ${canDelete ? `
-          <button onclick="deleteUser('${u.TenDangNhap}', '${uRole}')" class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition" title="Xóa tài khoản này">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
-        ` : `
-          <span class="text-[10px] text-slate-400 italic">${isSelf ? '(Hiện tại)' : (isAdmin ? 'Bảo vệ' : 'Khóa')}</span>
-        `}
+        <div class="flex items-center justify-end gap-1">
+          ${(canDelete || isSelf) ? `
+            <button onclick="openChangePasswordModal('${u.TenDangNhap}')" class="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition" title="Đổi / Đặt lại mật khẩu">
+              <i data-lucide="key" class="w-4 h-4"></i>
+            </button>
+          ` : ''}
+          ${canDelete ? `
+            <button onclick="deleteUser('${u.TenDangNhap}', '${uRole}')" class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition" title="Xóa tài khoản này">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          ` : (isSelf ? `<span class="text-[10px] text-slate-400 italic">(Bạn)</span>` : (isAdmin ? `<span class="text-[10px] text-slate-400 italic">Bảo vệ</span>` : ''))}
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -1962,4 +1983,135 @@ function deleteUser(targetUsername, targetRole) {
       }
     }
   });
+}
+
+// ==================== 12. ĐỔI MẬT KHẨU / ĐẶT LẠI MẬT KHẨU ====================
+
+function openChangePasswordModal(targetUsername = null) {
+  if (!state.currentUser) {
+    Swal.fire('Chưa đăng nhập', 'Vui lòng đăng nhập để thực hiện đổi mật khẩu!', 'warning');
+    return;
+  }
+
+  const myUsername = state.currentUser.TenDangNhap;
+  const usernameToChange = targetUsername || myUsername;
+  const isResetByAdmin = !!(targetUsername && targetUsername.toLowerCase() !== myUsername.toLowerCase());
+
+  document.getElementById('change-pass-target-user').value = usernameToChange;
+  document.getElementById('change-pass-is-admin-reset').value = isResetByAdmin ? 'true' : 'false';
+  document.getElementById('change-pass-username-display').textContent = usernameToChange;
+
+  const oldGroup = document.getElementById('change-pass-old-group');
+  const titleEl = document.getElementById('change-pass-title');
+
+  if (isResetByAdmin) {
+    oldGroup.classList.add('hidden');
+    document.getElementById('change-pass-old').value = '';
+    document.getElementById('change-pass-old').removeAttribute('required');
+    if (titleEl) {
+      titleEl.innerHTML = `<i data-lucide="key-round" class="w-5 h-5 text-amber-500"></i> Đặt Lại Mật Khẩu Cho [${usernameToChange}]`;
+    }
+  } else {
+    oldGroup.classList.remove('hidden');
+    document.getElementById('change-pass-old').setAttribute('required', 'required');
+    document.getElementById('change-pass-old').value = '';
+    if (titleEl) {
+      titleEl.innerHTML = `<i data-lucide="key-round" class="w-5 h-5 text-amber-500"></i> Đổi Mật Khẩu Cá Nhân`;
+    }
+  }
+
+  document.getElementById('change-pass-new').value = '';
+  document.getElementById('change-pass-confirm').value = '';
+  document.getElementById('modal-change-password').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeChangePasswordModal() {
+  document.getElementById('modal-change-password').classList.add('hidden');
+  document.getElementById('form-change-password').reset();
+}
+
+async function submitChangePassword(e) {
+  e.preventDefault();
+
+  const targetUsername = document.getElementById('change-pass-target-user').value.trim();
+  const isResetByAdmin = document.getElementById('change-pass-is-admin-reset').value === 'true';
+  const oldPassword = document.getElementById('change-pass-old').value.trim();
+  const newPassword = document.getElementById('change-pass-new').value.trim();
+  const confirmPassword = document.getElementById('change-pass-confirm').value.trim();
+  const callerRole = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+
+  if (!isResetByAdmin && !oldPassword) {
+    Swal.fire('Thiếu thông tin', 'Vui lòng nhập mật khẩu hiện tại!', 'warning');
+    return;
+  }
+
+  if (!newPassword || newPassword.length < 4) {
+    Swal.fire('Mật khẩu quá ngắn', 'Mật khẩu mới phải có ít nhất 4 ký tự!', 'warning');
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    Swal.fire('Mật khẩu không khớp', 'Mật khẩu mới và mật khẩu xác nhận không trùng khớp!', 'warning');
+    return;
+  }
+
+  Swal.fire({
+    title: 'Đang cập nhật mật khẩu...',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  try {
+    if (state.gasUrl) {
+      const res = await fetch(state.gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'doi_mat_khau',
+          username: targetUsername,
+          oldPassword: oldPassword,
+          newPassword: newPassword,
+          callerRole: callerRole,
+          isResetByAdmin: isResetByAdmin
+        })
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        Swal.fire('Không thành công', data.message || 'Lỗi khi cập nhật mật khẩu', 'error');
+        return;
+      }
+
+      await loadDataFromSheets();
+    } else {
+      // Demo mode
+      const userKey = targetUsername.toLowerCase();
+      if (!DEMO_USERS[userKey]) {
+        Swal.fire('Lỗi', 'Không tìm thấy tài khoản trong dữ liệu!', 'error');
+        return;
+      }
+
+      if (!isResetByAdmin && DEMO_USERS[userKey].MatKhau !== oldPassword) {
+        Swal.fire('Sai mật khẩu', 'Mật khẩu hiện tại không chính xác!', 'error');
+        return;
+      }
+
+      DEMO_USERS[userKey].MatKhau = newPassword;
+      const stateUser = (state.users || []).find(u => u.TenDangNhap.toLowerCase() === userKey);
+      if (stateUser) stateUser.MatKhau = newPassword;
+    }
+
+    closeChangePasswordModal();
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Đổi mật khẩu thành công!',
+      text: `Mật khẩu mới của tài khoản [${targetUsername}] đã được lưu thành công. Vui lòng ghi nhớ mật khẩu này!`,
+      confirmButtonColor: '#3b82f6',
+      confirmButtonText: 'Đã hiểu'
+    });
+  } catch (err) {
+    Swal.fire('Lỗi', err.message || 'Có lỗi xảy ra khi đổi mật khẩu', 'error');
+  }
 }
