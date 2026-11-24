@@ -319,8 +319,62 @@ function doPost(e) {
       sheetND.deleteRow(targetIndex);
       return responseJSON({ success: true, message: "Đã xóa tài khoản [" + targetUsername + "] thành công!" });
     }
+
+    // 4. ACTION: ĐỔI MẬT KHẨU
+    if (action === "doi_mat_khau") {
+      var username = String(data.username || "").trim().toLowerCase();
+      var oldPassword = String(data.oldPassword || "").trim();
+      var newPassword = String(data.newPassword || "").trim();
+      var callerRole = String(data.callerRole || "").toUpperCase();
+      var isResetByAdmin = Boolean(data.isResetByAdmin);
+
+      if (!username || !newPassword) {
+        return responseJSON({ success: false, message: "Vui lòng nhập đầy đủ mật khẩu mới!" });
+      }
+
+      var ndValues = sheetND.getDataRange().getValues();
+      var targetIndex = -1;
+      var currentPass = "";
+      var targetRole = "";
+
+      for (var pIdx = 1; pIdx < ndValues.length; pIdx++) {
+        if (String(ndValues[pIdx][0]).trim().toLowerCase() === username) {
+          targetIndex = pIdx + 1; // 1-indexed trong Google Sheet
+          currentPass = String(ndValues[pIdx][1]).trim();
+          targetRole = String(ndValues[pIdx][3] || "").toUpperCase();
+          break;
+        }
+      }
+
+      if (targetIndex === -1) {
+        return responseJSON({ success: false, message: "Không tìm thấy tài khoản: " + username });
+      }
+
+      // Nếu người dùng tự đổi mật khẩu, bắt buộc kiểm tra mật khẩu hiện tại
+      if (!isResetByAdmin) {
+        if (currentPass !== oldPassword) {
+          return responseJSON({ success: false, message: "Mật khẩu hiện tại không chính xác!" });
+        }
+      } else {
+        // Quản lý hoặc Admin đặt lại mật khẩu cho cấp dưới
+        if (callerRole === "THU_KHO" && targetRole !== "NHAN_VIEN") {
+          return responseJSON({ success: false, message: "Quản lý chỉ có quyền đổi mật khẩu cho Nhân viên!" });
+        }
+        if (targetRole === "ADMIN" && callerRole !== "ADMIN") {
+          return responseJSON({ success: false, message: "Không có quyền đổi mật khẩu tài khoản Quản trị viên!" });
+        }
+      }
+
+      // Cập nhật cột MatKhau (cột B, index 2)
+      sheetND.getRange(targetIndex, 2).setValue(newPassword);
+
+      return responseJSON({
+        success: true,
+        message: "Đã đổi mật khẩu cho tài khoản [" + username + "] thành công!"
+      });
+    }
     
-    // 4. ACTION: GIAO DỊCH NHẬP KHO / XUẤT KHO THEO WORK ORDER
+    // 5. ACTION: GIAO DỊCH NHẬP KHO / XUẤT KHO THEO WORK ORDER
     if (action === "giao_dich") {
       var maSP = String(data.MaSP).trim();
       var loai = data.LoaiGiaoDich;
