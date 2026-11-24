@@ -1,7 +1,7 @@
 /**
  * ====================================================================
- * GOOGLE APPS SCRIPT - API QUẢN LÝ THÙNG (BOX), PALLET & SPOOL QUẤN CÁP
- * (HỖ TRỢ ADMIN XÓA MÃ PN VẬT TƯ)
+ * GOOGLE APPS SCRIPT - API QUẢN LÝ THÙNG, PALLET & SPOOL QUẤN CÁP
+ * (HỆ THỐNG PHÂN CẤP TẠO TÀI KHOẢN: ADMIN TẠO QL+NV, QL TẠO NV)
  * ====================================================================
  */
 
@@ -65,6 +65,7 @@ function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var action = e.parameter.action || "get_all";
+    var userRole = (e.parameter.role || "").toUpperCase();
     
     var sheetSP = ss.getSheetByName("SanPham");
     var sheetLS = ss.getSheetByName("LichSu");
@@ -83,6 +84,7 @@ function doGet(e) {
       var spData = sheetSP.getDataRange().getValues();
       var lsData = sheetLS ? sheetLS.getDataRange().getValues() : [];
       var woData = sheetWO ? sheetWO.getDataRange().getValues() : [];
+      var ndData = sheetND ? sheetND.getDataRange().getValues() : [];
       
       var sanPham = [];
       if (spData.length > 1) {
@@ -144,8 +146,33 @@ function doGet(e) {
           });
         }
       }
+
+      // Danh sách người dùng (Chỉ trả về cho Admin hoặc Thủ kho)
+      var usersList = [];
+      if ((userRole === "ADMIN" || userRole === "THU_KHO") && ndData.length > 1) {
+        for (var u = 1; u < ndData.length; u++) {
+          var uRow = ndData[u];
+          if (!uRow[0]) continue;
+          var vtro = String(uRow[3] || "NHAN_VIEN").toUpperCase();
+          // Quản lý (Thủ kho) chỉ được xem danh sách Nhân viên
+          if (userRole === "THU_KHO" && vtro !== "NHAN_VIEN") continue;
+          
+          usersList.push({
+            TenDangNhap: String(uRow[0]),
+            HoTen: String(uRow[2] || uRow[0]),
+            VaiTro: vtro,
+            TrangThai: String(uRow[4] || "HoatDong")
+          });
+        }
+      }
       
-      return responseJSON({ success: true, sanPham: sanPham, workOrders: workOrders, lichSu: lichSu });
+      return responseJSON({
+        success: true,
+        sanPham: sanPham,
+        workOrders: workOrders,
+        lichSu: lichSu,
+        users: usersList
+      });
     }
     
     return responseJSON({ success: false, message: "Action không hợp lệ" });
@@ -215,8 +242,85 @@ function doPost(e) {
       
       return responseJSON({ success: false, message: "Tên đăng nhập hoặc mật khẩu không chính xác!" });
     }
+
+    // 2. ACTION: TẠO TÀI KHOẢN MỚI (PHÂN QUYỀN: ADMIN TẠO QL+NV, QL TẠO NV)
+    if (action === "tao_tai_khoan") {
+      var callerRole = String(data.callerRole || "").toUpperCase();
+      var newUsername = String(data.username || "").trim().toLowerCase();
+      var newPassword = String(data.password || "").trim();
+      var newHoTen = String(data.hoTen || "").trim();
+      var newRole = String(data.role || "NHAN_VIEN").toUpperCase();
+
+      if (!newUsername || !newPassword || !newHoTen) {
+        return responseJSON({ success: false, message: "Vui lòng điền đầy đủ Tên đăng nhập, Mật khẩu và Họ tên!" });
+      }
+
+      // KIỂM SOÁT PHÂN QUYỀN TẠO TÀI KHOẢN:
+      if (callerRole === "ADMIN") {
+        // Admin được tạo Quản lý (THU_KHO) và Nhân viên (NHAN_VIEN)
+        if (newRole !== "THU_KHO" && newRole !== "NHAN_VIEN") {
+          return responseJSON({ success: false, message: "Vai trò không hợp lệ!" });
+        }
+      } else if (callerRole === "THU_KHO") {
+        // Quản lý (Thủ kho) CHỈ ĐƯỢC PHÉP tạo Nhân viên (NHAN_VIEN)
+        if (newRole !== "NHAN_VIEN") {
+          return responseJSON({ success: false, message: "⛔ Quản lý chỉ có quyền tạo tài khoản Nhân viên!" });
+        }
+      } else {
+        return responseJSON({ success: false, message: "⛔ Bạn không có quyền tạo tài khoản người dùng!" });
+      }
+
+      // Kiểm tra trùng username
+      var ndValues = sheetND.getDataRange().getValues();
+      for (var n = 1; n < ndValues.length; n++) {
+        if (String(ndValues[n][0]).trim().toLowerCase() === newUsername) {
+          return responseJSON({ success: false, message: "Tên đăng nhập [" + newUsername + "] đã tồn tại trên hệ thống!" });
+        }
+      }
+
+      // Thêm vào sheet NguoiDung
+      sheetND.appendRow([newUsername, newPassword, newHoTen, newRole, "HoatDong", "Tạo bởi " + callerRole]);
+
+      return responseJSON({
+        success: true,
+        message: "Tạo tài khoản [" + newUsername + "] thành công!"
+      });
+    }
+
+    // 3. ACTION: XÓA / KHÓA TÀI KHOẢN
+    if (action === "xoa_tai_khoan") {
+      var callerRole = String(data.callerRole || "").toUpperCase();
+      var targetUsername = String(data.targetUsername || "").trim().toLowerCase();
+
+      var ndValues = sheetND.getDataRange().getValues();
+      var targetIndex = -1;
+      var targetRole = "";
+
+      for (var t = 1; t < ndValues.length; t++) {
+        if (String(ndValues[t][0]).trim().toLowerCase() === targetUsername) {
+          targetIndex = t + 1;
+          targetRole = String(ndValues[t][3] || "").toUpperCase();
+          break;
+        }
+      }
+
+      if (targetIndex === -1) {
+        return responseJSON({ success: false, message: "Không tìm thấy tài khoản: " + targetUsername });
+      }
+
+      if (targetRole === "ADMIN") {
+        return responseJSON({ success: false, message: "Không thể xóa tài khoản Quản trị viên tối cao!" });
+      }
+
+      if (callerRole === "THU_KHO" && targetRole !== "NHAN_VIEN") {
+        return responseJSON({ success: false, message: "Quản lý chỉ có quyền xóa tài khoản Nhân viên!" });
+      }
+
+      sheetND.deleteRow(targetIndex);
+      return responseJSON({ success: true, message: "Đã xóa tài khoản [" + targetUsername + "] thành công!" });
+    }
     
-    // 2. ACTION: GIAO DỊCH NHẬP KHO / XUẤT KHO THEO WORK ORDER
+    // 4. ACTION: GIAO DỊCH NHẬP KHO / XUẤT KHO THEO WORK ORDER
     if (action === "giao_dich") {
       var maSP = String(data.MaSP).trim();
       var loai = data.LoaiGiaoDich;
@@ -314,7 +418,7 @@ function doPost(e) {
       });
     }
     
-    // 3. ACTION: THAY ĐỔI HÌNH ẢNH & THÔNG TIN SẢN PHẨM
+    // 5. ACTION: THAY ĐỔI HÌNH ẢNH & THÔNG TIN SẢN PHẨM
     if (action === "sua_san_pham") {
       var userRole = String(data.userRole || "").toUpperCase();
       if (userRole !== "ADMIN" && userRole !== "THU_KHO") {
@@ -356,7 +460,7 @@ function doPost(e) {
       });
     }
 
-    // 4. ACTION: XÓA MÃ PN VẬT TƯ KHỎI KHO (CHỈ DÀNH CHO ADMIN)
+    // 6. ACTION: XÓA MÃ PN VẬT TƯ KHỎI KHO (CHỈ DÀNH CHO ADMIN)
     if (action === "xoa_san_pham") {
       var userRole = String(data.userRole || "").toUpperCase();
       if (userRole !== "ADMIN") {
@@ -382,16 +486,11 @@ function doPost(e) {
         return responseJSON({ success: false, message: "Không tìm thấy mã PN " + maSP + " trong bảng tính!" });
       }
 
-      // Xóa dòng này khỏi Sheet SanPham
       sheetSP.deleteRow(rowIndex);
-
-      return responseJSON({
-        success: true,
-        message: "Đã xóa vĩnh viễn mã PN [" + maSP + "] khỏi kho!"
-      });
+      return responseJSON({ success: true, message: "Đã xóa vĩnh viễn mã PN [" + maSP + "] khỏi kho!" });
     }
 
-    // 5. ACTION: THÊM WORK ORDER MỚI
+    // 7. ACTION: THÊM WORK ORDER MỚI
     if (action === "them_work_order") {
       var maWO = String(data.MaWO || "").trim().toUpperCase();
       var maSP = String(data.MaSP || "").trim().toUpperCase();
@@ -422,7 +521,7 @@ function doPost(e) {
       return responseJSON({ success: true, message: "Tạo Lệnh Work Order " + maWO + " thành công!" });
     }
     
-    // 6. ACTION: THÊM THÙNG / PALLET / SPOOL MỚI
+    // 8. ACTION: THÊM THÙNG / PALLET / SPOOL MỚI
     if (action === "them_san_pham") {
       var userRole = String(data.userRole || "").toUpperCase();
       if (userRole !== "ADMIN" && userRole !== "THU_KHO") {

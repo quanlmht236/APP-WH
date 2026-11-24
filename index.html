@@ -120,6 +120,12 @@
         <i data-lucide="history" class="w-5 h-5"></i>
         <span>Lịch sử giao dịch</span>
       </button>
+
+      <!-- Nút Quản lý tài khoản nhân sự (Dành cho Admin & Quản lý) -->
+      <button onclick="openUserManagerModal()" id="nav-desktop-users" class="role-manager-only w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+        <i data-lucide="users" class="w-5 h-5"></i>
+        <span id="nav-users-text">Tài khoản & Nhân sự</span>
+      </button>
     </nav>
 
     <!-- Bottom Settings / Sync Status -->
@@ -177,6 +183,11 @@
         <button onclick="openAddProductModal()" id="btn-add-product-header" class="role-manager-only flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold text-xs md:text-sm hover:bg-blue-700 transition shadow-md shadow-blue-500/25">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span class="hidden sm:inline">Thêm mã</span>
+        </button>
+
+        <!-- Nút Quản lý tài khoản trên Mobile (Admin & Quản lý) -->
+        <button onclick="openUserManagerModal()" class="role-manager-only md:hidden p-2 text-indigo-600 hover:bg-slate-100 rounded-xl" title="Quản lý tài khoản nhân sự">
+          <i data-lucide="users" class="w-5 h-5"></i>
         </button>
 
         <!-- Nút cài đặt trên Mobile -->
@@ -521,7 +532,7 @@
     </button>
   </nav>
 
-  <!-- ==================== MODAL: ĐĂNG NHẬP ==================== -->
+  <!-- ==================== MODAL: ĐĂNG NHẬP (BẢO MẬT) ==================== -->
   <div id="modal-login" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl p-6 sm:p-8 space-y-6">
       <div class="text-center space-y-2">
@@ -529,7 +540,7 @@
           <i data-lucide="disc" class="w-8 h-8"></i>
         </div>
         <h3 class="text-xl font-extrabold text-slate-800">SmartKho</h3>
-        <p class="text-xs text-slate-500">Quản lý Thùng (Box), Pallet & Spool</p>
+        <p class="text-xs text-slate-500">Đăng nhập hệ thống quản lý vật tư</p>
       </div>
 
       <form id="form-login" onsubmit="handleLogin(event)" class="space-y-4">
@@ -537,15 +548,15 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Tên đăng nhập</label>
           <div class="relative">
             <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5"></i>
-            <input type="text" id="login-username" required placeholder="admin / thukho / nhanvien" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="text" id="login-username" required placeholder="Nhập tên đăng nhập..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Mật khẩu / Mã PIN</label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Mật khẩu</label>
           <div class="relative">
             <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5"></i>
-            <input type="password" id="login-password" required placeholder="Mặc định: 123456" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="password" id="login-password" required placeholder="Nhập mật khẩu..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           </div>
         </div>
 
@@ -554,24 +565,6 @@
           <span>Đăng nhập</span>
         </button>
       </form>
-
-      <div class="pt-4 border-t border-slate-100 space-y-2">
-        <p class="text-[11px] font-semibold text-slate-400 text-center uppercase tracking-wider">Đăng nhập nhanh thử nghiệm:</p>
-        <div class="grid grid-cols-3 gap-1.5">
-          <button type="button" onclick="quickLogin('admin')" class="py-2 px-1 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[11px] font-bold transition flex flex-col items-center">
-            <span>👑 Admin</span>
-            <span class="text-[9px] font-normal text-purple-500">Toàn quyền</span>
-          </button>
-          <button type="button" onclick="quickLogin('thukho')" class="py-2 px-1 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[11px] font-bold transition flex flex-col items-center">
-            <span>🛡️ Thủ kho</span>
-            <span class="text-[9px] font-normal text-blue-500">Tạo WO + Mã</span>
-          </button>
-          <button type="button" onclick="quickLogin('nhanvien')" class="py-2 px-1 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[11px] font-bold transition flex flex-col items-center">
-            <span>👤 Nhân viên</span>
-            <span class="text-[9px] font-normal text-emerald-500">Xuất/Nhập WO</span>
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -863,6 +856,97 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: QUẢN LÝ TÀI KHOẢN (ADMIN & QUẢN LÝ) ==================== -->
+  <div id="modal-manage-users" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div>
+          <h4 id="user-manager-title" class="font-bold text-slate-800 text-base flex items-center gap-2">
+            <i data-lucide="users" class="w-5 h-5 text-indigo-600"></i> Quản Lý Tài Khoản Nhân Sự
+          </h4>
+          <p id="user-manager-subtitle" class="text-xs text-slate-500 mt-0.5">Admin tạo Quản lý & Nhân viên; Quản lý tạo Nhân viên</p>
+        </div>
+        <button onclick="closeUserManagerModal()" class="p-1 text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4 flex-1">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-700">Danh sách tài khoản trực thuộc:</span>
+          <button onclick="openAddUserModal()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-500/25">
+            <i data-lucide="user-plus" class="w-4 h-4"></i> Tạo tài khoản mới
+          </button>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 overflow-hidden">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">Tài khoản</th>
+                <th class="px-4 py-3">Họ và tên</th>
+                <th class="px-4 py-3">Vai trò</th>
+                <th class="px-4 py-3">Trạng thái</th>
+                <th class="px-4 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="user-manager-table-body" class="divide-y divide-slate-100">
+              <!-- Render từ JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+        <button onclick="closeUserManagerModal()" class="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: TẠO TÀI KHOẢN MỚI ==================== -->
+  <div id="modal-add-user" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <h4 class="font-bold text-slate-800 text-base flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-5 h-5 text-indigo-600"></i> Tạo Tài Khoản Mới
+        </h4>
+        <button onclick="closeAddUserModal()" class="p-1 text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-add-user" onsubmit="submitAddUser(event)" class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tên đăng nhập *</label>
+          <input type="text" id="new-user-username" required placeholder="Ví dụ: nv_kho1, ql_chuyen2..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 font-mono">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Mật khẩu khởi tạo *</label>
+          <input type="password" id="new-user-password" required placeholder="Nhập mật khẩu..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Họ và tên người sử dụng *</label>
+          <input type="text" id="new-user-fullname" required placeholder="Ví dụ: Nguyễn Văn A" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Phân quyền vai trò *</label>
+          <select id="new-user-role-select" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 bg-white font-semibold">
+            <!-- Render động tùy thuộc người đang đăng nhập là Admin hay Quản lý -->
+          </select>
+          <p id="new-user-role-hint" class="text-[11px] text-slate-400 mt-1"></p>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+          <button type="button" onclick="closeAddUserModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200">Hủy</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md shadow-indigo-500/20">Lưu tài khoản</button>
+        </div>
+      </form>
     </div>
   </div>
 

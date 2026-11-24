@@ -174,6 +174,7 @@ let state = {
   sanPham: [],
   workOrders: [],
   lichSu: [],
+  users: [], // Danh sách tài khoản người dùng
   currentTab: 'dashboard',
   selectedCategory: 'ALL', // 'ALL', 'Thùng (Box)', 'Pallet', 'Spool quấn cáp'
   transType: 'XUAT',
@@ -393,6 +394,16 @@ function applyRolePermissions() {
     }
   });
 
+  // Đổi chữ trên nút Menu Quản lý người dùng
+  const navUsersText = document.getElementById('nav-users-text');
+  if (navUsersText) {
+    if (role === 'ADMIN') {
+      navUsersText.textContent = 'Quản lý tài khoản (Admin)';
+    } else if (role === 'THU_KHO') {
+      navUsersText.textContent = 'Quản lý nhân viên';
+    }
+  }
+
   renderInventory();
   lucide.createIcons();
 }
@@ -467,6 +478,12 @@ function loadDemoData() {
   state.sanPham = JSON.parse(JSON.stringify(DEMO_PRODUCTS));
   state.workOrders = JSON.parse(JSON.stringify(DEMO_WORK_ORDERS));
   state.lichSu = JSON.parse(JSON.stringify(DEMO_HISTORY));
+  state.users = Object.values(DEMO_USERS).map(u => ({
+    TenDangNhap: u.TenDangNhap,
+    HoTen: u.HoTen,
+    VaiTro: u.VaiTro,
+    TrangThai: 'HoatDong'
+  }));
   renderAllViews();
 }
 
@@ -488,7 +505,8 @@ async function loadDataFromSheets() {
   });
 
   try {
-    const res = await fetch(`${state.gasUrl}?action=get_all`);
+    const roleParam = state.currentUser ? state.currentUser.VaiTro : 'NHAN_VIEN';
+    const res = await fetch(`${state.gasUrl}?action=get_all&role=${encodeURIComponent(roleParam)}`);
     const data = await res.json();
 
     Swal.close();
@@ -497,6 +515,7 @@ async function loadDataFromSheets() {
       state.sanPham = data.sanPham || [];
       state.workOrders = data.workOrders || [];
       state.lichSu = data.lichSu || [];
+      state.users = data.users || [];
       renderAllViews();
       
       const Toast = Swal.mixin({
@@ -1651,4 +1670,296 @@ function saveSettings() {
     loadDemoData();
     Swal.fire('Đã lưu', 'Đang sử dụng dữ liệu mẫu (Demo)', 'info');
   }
+}
+
+// ==================== 11. QUẢN LÝ TÀI KHOẢN & PHÂN QUYỀN (ADMIN & QUẢN LÝ) ====================
+
+function openUserManagerModal() {
+  const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+  if (role !== 'ADMIN' && role !== 'THU_KHO') {
+    Swal.fire('Hạn chế quyền', 'Chỉ Quản trị viên hoặc Quản lý mới có quyền quản lý tài khoản nhân sự!', 'warning');
+    return;
+  }
+
+  const titleEl = document.getElementById('user-manager-title');
+  const subtitleEl = document.getElementById('user-manager-subtitle');
+
+  if (role === 'ADMIN') {
+    if (titleEl) titleEl.innerHTML = '<i data-lucide="shield-check" class="w-5 h-5 text-purple-600"></i> Quản Lý Tài Khoản Hệ Thống (Admin)';
+    if (subtitleEl) subtitleEl.textContent = 'Quản trị viên có toàn quyền: Tạo Quản lý (Thủ kho) và Nhân viên cấp phát';
+  } else {
+    if (titleEl) titleEl.innerHTML = '<i data-lucide="users" class="w-5 h-5 text-indigo-600"></i> Quản Lý Tài Khoản Nhân Viên (Quản lý)';
+    if (subtitleEl) subtitleEl.textContent = 'Bạn có quyền tạo và quản lý danh sách tài khoản Nhân viên cấp phát';
+  }
+
+  renderUserManagerTable();
+  document.getElementById('modal-manage-users').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeUserManagerModal() {
+  document.getElementById('modal-manage-users').classList.add('hidden');
+}
+
+function renderUserManagerTable() {
+  const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+  const tbody = document.getElementById('user-manager-table-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+
+  let list = state.users || [];
+  // Nếu là Thủ kho (Quản lý), chỉ hiển thị nhân viên
+  if (role === 'THU_KHO') {
+    list = list.filter(u => (u.VaiTro || '').toUpperCase() === 'NHAN_VIEN');
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="px-4 py-8 text-center text-slate-400">
+          Chưa có tài khoản nào được tạo. Hãy nhấn "Tạo tài khoản mới" ở trên.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const roleBadges = {
+    ADMIN: '<span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold text-[10px]">👑 Quản trị viên</span>',
+    THU_KHO: '<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">🛡️ Quản lý (Thủ kho)</span>',
+    NHAN_VIEN: '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">👤 Nhân viên</span>'
+  };
+
+  list.forEach(u => {
+    const uRole = (u.VaiTro || 'NHAN_VIEN').toUpperCase();
+    const isSelf = state.currentUser && state.currentUser.TenDangNhap.toLowerCase() === u.TenDangNhap.toLowerCase();
+    const isAdmin = uRole === 'ADMIN';
+    const canDelete = !isSelf && !isAdmin && (role === 'ADMIN' || (role === 'THU_KHO' && uRole === 'NHAN_VIEN'));
+
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-slate-50/80 transition';
+    tr.innerHTML = `
+      <td class="px-4 py-3 font-mono font-bold text-slate-800">${u.TenDangNhap}</td>
+      <td class="px-4 py-3 font-semibold text-slate-700">${u.HoTen || u.TenDangNhap}</td>
+      <td class="px-4 py-3">${roleBadges[uRole] || uRole}</td>
+      <td class="px-4 py-3">
+        <span class="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Hoạt động
+        </span>
+      </td>
+      <td class="px-4 py-3 text-right">
+        ${canDelete ? `
+          <button onclick="deleteUser('${u.TenDangNhap}', '${uRole}')" class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition" title="Xóa tài khoản này">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        ` : `
+          <span class="text-[10px] text-slate-400 italic">${isSelf ? '(Hiện tại)' : (isAdmin ? 'Bảo vệ' : 'Khóa')}</span>
+        `}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  lucide.createIcons();
+}
+
+function openAddUserModal() {
+  const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+  if (role !== 'ADMIN' && role !== 'THU_KHO') {
+    Swal.fire('Hạn chế quyền', 'Bạn không có quyền tạo tài khoản người dùng!', 'warning');
+    return;
+  }
+
+  const roleSelect = document.getElementById('new-user-role-select');
+  const roleHint = document.getElementById('new-user-role-hint');
+
+  if (role === 'ADMIN') {
+    roleSelect.innerHTML = `
+      <option value="THU_KHO">🛡️ Quản lý (Thủ kho)</option>
+      <option value="NHAN_VIEN" selected>👤 Nhân viên cấp phát</option>
+    `;
+    if (roleHint) roleHint.textContent = 'Quản trị viên có thể tạo Quản lý (Thủ kho) hoặc Nhân viên cấp phát.';
+  } else {
+    // Quản lý (Thủ kho) chỉ được tạo Nhân viên
+    roleSelect.innerHTML = `
+      <option value="NHAN_VIEN" selected>👤 Nhân viên cấp phát</option>
+    `;
+    if (roleHint) roleHint.textContent = 'Quản lý (Thủ kho) có quyền tạo tài khoản Nhân viên cấp phát.';
+  }
+
+  document.getElementById('form-add-user').reset();
+  document.getElementById('modal-add-user').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function closeAddUserModal() {
+  document.getElementById('modal-add-user').classList.add('hidden');
+}
+
+async function submitAddUser(e) {
+  e.preventDefault();
+
+  const callerRole = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+  if (callerRole !== 'ADMIN' && callerRole !== 'THU_KHO') {
+    Swal.fire('Hạn chế quyền', 'Bạn không có quyền tạo tài khoản!', 'error');
+    return;
+  }
+
+  const username = document.getElementById('new-user-username').value.trim().toLowerCase();
+  const password = document.getElementById('new-user-password').value.trim();
+  const fullName = document.getElementById('new-user-fullname').value.trim();
+  const targetRole = document.getElementById('new-user-role-select').value;
+
+  if (!username || !password || !fullName) {
+    Swal.fire('Thiếu thông tin', 'Vui lòng nhập đầy đủ Tên đăng nhập, Mật khẩu và Họ tên!', 'warning');
+    return;
+  }
+
+  // Quản lý chỉ được tạo nhân viên
+  if (callerRole === 'THU_KHO' && targetRole !== 'NHAN_VIEN') {
+    Swal.fire('Từ chối quyền', 'Quản lý chỉ có quyền tạo tài khoản Nhân viên cấp phát!', 'error');
+    return;
+  }
+
+  Swal.fire({
+    title: 'Đang tạo tài khoản...',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  try {
+    if (state.gasUrl) {
+      const res = await fetch(state.gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'tao_tai_khoan',
+          callerRole: callerRole,
+          username: username,
+          password: password,
+          hoTen: fullName,
+          role: targetRole
+        })
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        Swal.fire('Không thể tạo tài khoản', data.message || 'Lỗi khi lưu lên Google Sheet', 'error');
+        return;
+      }
+
+      await loadDataFromSheets();
+    } else {
+      // Demo mode
+      if (DEMO_USERS[username] || state.users.some(u => u.TenDangNhap.toLowerCase() === username)) {
+        Swal.fire('Đã tồn tại', `Tên đăng nhập [${username}] đã tồn tại trong danh sách!`, 'warning');
+        return;
+      }
+
+      const newUserObj = {
+        TenDangNhap: username,
+        MatKhau: password,
+        HoTen: fullName,
+        VaiTro: targetRole,
+        TrangThai: 'HoatDong'
+      };
+      DEMO_USERS[username] = newUserObj;
+      state.users.push(newUserObj);
+    }
+
+    closeAddUserModal();
+    renderUserManagerTable();
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Tạo tài khoản thành công!',
+      text: `Tài khoản [${username}] (${fullName}) đã được kích hoạt.`,
+      timer: 2000,
+      showConfirmButton: false
+    });
+  } catch (err) {
+    Swal.fire('Lỗi', err.message || 'Có lỗi xảy ra khi tạo tài khoản', 'error');
+  }
+}
+
+function deleteUser(targetUsername, targetRole) {
+  const callerRole = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+  
+  if (callerRole !== 'ADMIN' && callerRole !== 'THU_KHO') {
+    Swal.fire('Hạn chế quyền', 'Bạn không có quyền xóa tài khoản!', 'error');
+    return;
+  }
+
+  if (targetRole === 'ADMIN') {
+    Swal.fire('Từ chối', 'Không thể xóa tài khoản Quản trị viên tối cao!', 'error');
+    return;
+  }
+
+  if (callerRole === 'THU_KHO' && targetRole !== 'NHAN_VIEN') {
+    Swal.fire('Từ chối quyền', 'Quản lý chỉ có quyền xóa tài khoản Nhân viên!', 'error');
+    return;
+  }
+
+  if (state.currentUser && state.currentUser.TenDangNhap.toLowerCase() === targetUsername.toLowerCase()) {
+    Swal.fire('Từ chối', 'Bạn không thể tự xóa tài khoản của chính mình!', 'warning');
+    return;
+  }
+
+  Swal.fire({
+    title: `Xác nhận xóa tài khoản [${targetUsername}]?`,
+    text: 'Tài khoản này sẽ bị thu hồi quyền truy cập hệ thống ngay lập tức.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#e11d48',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Đồng ý xóa',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      Swal.fire({
+        title: 'Đang xóa tài khoản...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      try {
+        if (state.gasUrl) {
+          const res = await fetch(state.gasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'xoa_tai_khoan',
+              callerRole: callerRole,
+              targetUsername: targetUsername
+            })
+          });
+          const data = await res.json();
+
+          if (!data.success) {
+            Swal.fire('Lỗi', data.message || 'Không thể xóa tài khoản trên Google Sheet', 'error');
+            return;
+          }
+
+          await loadDataFromSheets();
+        } else {
+          // Demo mode
+          delete DEMO_USERS[targetUsername];
+          state.users = state.users.filter(u => u.TenDangNhap.toLowerCase() !== targetUsername.toLowerCase());
+        }
+
+        renderUserManagerTable();
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Đã xóa!',
+          text: `Đã xóa tài khoản [${targetUsername}] khỏi hệ thống.`,
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } catch (err) {
+        Swal.fire('Lỗi', err.message || 'Có lỗi xảy ra khi xóa tài khoản', 'error');
+      }
+    }
+  });
 }
