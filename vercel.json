@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "name": "smartkho-app",
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
