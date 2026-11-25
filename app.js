@@ -4,6 +4,34 @@
  * ====================================================================
  */
 
+// ====================================================================
+// CẤU HÌNH MẶC ĐỊNH HỆ THỐNG CHO MỌI THIẾT BỊ MỚI
+// (Link Google Apps Script dán vào đây sẽ tự động chạy cho TẤT CẢ các máy và điện thoại mới)
+// ====================================================================
+const DEFAULT_CONFIG = {
+  // Đường link Web App Google Apps Script chính thức của hệ thống:
+  gasUrl: "https://script.google.com/macros/s/AKfycbz3jQAR1DSAe64ksRYQnxW6WRziRtgAan-gCjwqLoCRrr5X6qdb1ikayEcCFr5QFUUj/exec",
+  cloudName: "awimwhb3",
+  uploadPreset: "ml_default"
+};
+
+// Hàm fetch có Timeout để tránh treo màn hình "Đang xác thực..." vô tận
+async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      throw new Error(`Quá thời gian chờ phản hồi (${timeoutMs / 1000}s). Máy chủ Google Sheet phản hồi quá lâu hoặc link Web App chưa chọn quyền "Bất kỳ ai (Anyone)".`);
+    }
+    throw err;
+  }
+}
+
 // Danh sách tài khoản thử nghiệm
 const DEMO_USERS = {
   admin: {
@@ -178,9 +206,9 @@ let state = {
   currentTab: 'dashboard',
   selectedCategory: 'ALL', // 'ALL', 'Thùng (Box)', 'Pallet', 'Spool quấn cáp'
   transType: 'XUAT',
-  gasUrl: localStorage.getItem('smartkho_gas_url') || '',
-  cloudName: localStorage.getItem('smartkho_cloud_name') || 'awimwhb3',
-  uploadPreset: localStorage.getItem('smartkho_upload_preset') || '',
+  gasUrl: localStorage.getItem('smartkho_gas_url') || DEFAULT_CONFIG.gasUrl || '',
+  cloudName: localStorage.getItem('smartkho_cloud_name') || DEFAULT_CONFIG.cloudName || 'awimwhb3',
+  uploadPreset: localStorage.getItem('smartkho_upload_preset') || DEFAULT_CONFIG.uploadPreset || '',
   scannerInstance: null,
   scannerTarget: 'general'
 };
@@ -257,15 +285,28 @@ async function handleLogin(e) {
     return;
   }
 
+  // Kiểm tra nếu người dùng vô tình dán link Thư viện (Library)
+  if (state.gasUrl && state.gasUrl.includes('/macros/library')) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Sai đường link Google Apps Script',
+      html: `Đường link hiện tại là link <b>Thư viện (Library)</b>:<br><code class="text-xs text-rose-600 break-all">${state.gasUrl}</code><br><br>Link này không thể nhận dữ liệu từ web. Link đúng phải có đuôi <b>/exec</b>.<br>Vui lòng bấm <b>"Cấu hình kết nối"</b> bên dưới để cập nhật lại link Web App!`,
+      confirmButtonColor: '#3b82f6',
+      confirmButtonText: 'Đã hiểu'
+    });
+    return;
+  }
+
   Swal.fire({
     title: 'Đang xác thực tài khoản...',
+    text: state.gasUrl ? 'Đang kết nối tới Google Sheets...' : 'Đang kiểm tra tài khoản...',
     allowOutsideClick: false,
     didOpen: () => Swal.showLoading()
   });
 
   try {
     if (state.gasUrl) {
-      const res = await fetch(state.gasUrl, {
+      const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
@@ -273,7 +314,7 @@ async function handleLogin(e) {
           username: u,
           password: p
         })
-      });
+      }, 10000);
       const data = await res.json();
       Swal.close();
 
@@ -293,6 +334,7 @@ async function handleLogin(e) {
         });
       }
     } else {
+      Swal.close();
       const matchedUser = DEMO_USERS[u];
       if (matchedUser && matchedUser.MatKhau === p) {
         state.currentUser = {
@@ -308,17 +350,18 @@ async function handleLogin(e) {
         Swal.fire({
           icon: 'error',
           title: 'Đăng nhập thất bại',
-          text: 'Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!',
+          html: 'Tên đăng nhập hoặc mật khẩu không chính xác.<br><br><small class="text-slate-500">Thiết bị này chưa có kết nối Google Sheets. Bạn có thể bấm <b>"Cấu hình kết nối"</b> bên dưới để dán link Web App.</small>',
           confirmButtonColor: '#3b82f6',
           confirmButtonText: 'Thử lại'
         });
       }
     }
   } catch (err) {
+    Swal.close();
     Swal.fire({
       icon: 'error',
-      title: 'Lỗi kết nối',
-      text: 'Không thể kết nối đến máy chủ đăng nhập: ' + err.message,
+      title: 'Lỗi kết nối máy chủ',
+      html: `Không thể kết nối đến Google Sheets:<br><span class="text-rose-600 font-medium text-xs">${err.message}</span><br><br><small class="text-slate-500">Gợi ý: Kiểm tra xem khi Triển khai trên Apps Script bạn đã chọn <b>"Ai có quyền truy cập: Bất kỳ ai (Anyone)"</b> chưa.</small>`,
       confirmButtonColor: '#3b82f6',
       confirmButtonText: 'Đóng'
     });
@@ -431,6 +474,8 @@ function updateConnectionStatus() {
   const desktopBadge = document.getElementById('connection-badge-desktop');
   const mobileBadge = document.getElementById('connection-badge-mobile');
   const syncStatus = document.getElementById('sync-status-desktop');
+  const loginDot = document.getElementById('login-gas-dot');
+  const loginText = document.getElementById('login-gas-text');
 
   if (isConnected) {
     if (desktopBadge) {
@@ -439,6 +484,11 @@ function updateConnectionStatus() {
     }
     if (mobileBadge) mobileBadge.className = 'absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500';
     if (syncStatus) syncStatus.textContent = 'Google Sheet Cloud';
+    if (loginDot) loginDot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+    if (loginText) {
+      loginText.className = 'text-emerald-700 font-bold';
+      loginText.textContent = 'Đã kết nối Google Sheet';
+    }
   } else {
     if (desktopBadge) {
       desktopBadge.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
@@ -446,7 +496,88 @@ function updateConnectionStatus() {
     }
     if (mobileBadge) mobileBadge.className = 'absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400';
     if (syncStatus) syncStatus.textContent = 'Dữ liệu Demo';
+    if (loginDot) loginDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+    if (loginText) {
+      loginText.className = 'text-amber-700 font-semibold';
+      loginText.textContent = 'Chưa kết nối Google Sheet';
+    }
   }
+}
+
+// Cấu hình nhanh link Google Apps Script ngay từ màn hình đăng nhập
+function openQuickConfigPrompt() {
+  Swal.fire({
+    title: 'Cấu hình Google Apps Script',
+    html: `
+      <p class="text-xs text-slate-500 mb-3 text-left">
+        Dán đường link <b>Web App URL</b> (kết thúc bằng <code>/exec</code>) để kết nối Google Sheet cho thiết bị này:
+      </p>
+      <input id="swal-input-gas-url" class="swal2-input !m-0 !w-full !text-xs font-mono" placeholder="https://script.google.com/macros/s/.../exec" value="${state.gasUrl || DEFAULT_CONFIG.gasUrl || ''}">
+      <p class="text-[11px] text-slate-400 mt-2 text-left">
+        💡 <b>Mẹo:</b> Để TẤT CẢ các máy mới tự động có link này mà không cần nhập, bạn chỉ cần dán link vào biến <code>DEFAULT_CONFIG.gasUrl</code> trong file <code>app.js</code> rồi đẩy lên GitHub!
+      </p>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'Lưu & Kiểm tra kết nối',
+    cancelButtonText: 'Đóng',
+    confirmButtonColor: '#3b82f6',
+    preConfirm: () => {
+      const inputEl = document.getElementById('swal-input-gas-url');
+      const val = (inputEl ? inputEl.value : '').trim();
+      if (!val) {
+        Swal.showValidationMessage('Vui lòng nhập đường link Web App!');
+        return false;
+      }
+      if (val.includes('/macros/library')) {
+        Swal.showValidationMessage('⚠️ Đây là link Thư viện (Library)! Link chuẩn phải là Web App và có đuôi /exec');
+        return false;
+      }
+      if (!val.includes('/macros/s/') || !val.endsWith('/exec')) {
+        Swal.showValidationMessage('⚠️ Link Web App chuẩn phải có dạng: https://script.google.com/macros/s/.../exec');
+        return false;
+      }
+      return val;
+    }
+  }).then(async (result) => {
+    if (result.isConfirmed && result.value) {
+      const newUrl = result.value;
+      state.gasUrl = newUrl;
+      localStorage.setItem('smartkho_gas_url', newUrl);
+      const configInput = document.getElementById('config-gas-url');
+      if (configInput) configInput.value = newUrl;
+      updateConnectionStatus();
+
+      Swal.fire({
+        title: 'Đang kiểm tra kết nối...',
+        text: 'Đang gửi tín hiệu kiểm tra tới Google Sheets...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      try {
+        const res = await fetchWithTimeout(`${newUrl}?action=get_all&role=GUEST`, {}, 8000);
+        const data = await res.json();
+        if (data.success) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Kết nối thành công!',
+            text: 'Thiết bị này đã được kết nối trực tiếp với Google Sheets của bạn.',
+            confirmButtonColor: '#3b82f6',
+            confirmButtonText: 'Tuyệt vời'
+          });
+        } else {
+          Swal.fire('Phản hồi từ Google Sheet', data.message || 'Đã kết nối được tới script!', 'info');
+        }
+      } catch (err) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Đã lưu nhưng chưa thể tải dữ liệu',
+          html: `Link đã được lưu vào máy này, nhưng khi gọi thử bị lỗi:<br><span class="text-xs text-rose-600">${err.message}</span><br><br><small class="text-slate-500">Hãy kiểm tra xem khi Triển khai trên Apps Script bạn đã chọn <b>"Ai có quyền truy cập: Bất kỳ ai (Anyone)"</b> chưa.</small>`,
+          confirmButtonColor: '#3b82f6'
+        });
+      }
+    }
+  });
 }
 
 function switchTab(tabId) {
@@ -522,7 +653,7 @@ async function loadDataFromSheets() {
 
   try {
     const roleParam = state.currentUser ? state.currentUser.VaiTro : 'NHAN_VIEN';
-    const res = await fetch(`${state.gasUrl}?action=get_all&role=${encodeURIComponent(roleParam)}`);
+    const res = await fetchWithTimeout(`${state.gasUrl}?action=get_all&role=${encodeURIComponent(roleParam)}`, {}, 15000);
     const data = await res.json();
 
     Swal.close();
@@ -943,7 +1074,7 @@ async function submitNewWorkOrder(e) {
 
   try {
     if (state.gasUrl) {
-      const res = await fetch(state.gasUrl, {
+      const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
@@ -1105,7 +1236,7 @@ async function submitTransaction(e) {
         GhiChu: ghiChu
       };
 
-      const res = await fetch(state.gasUrl, {
+      const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
@@ -1310,7 +1441,7 @@ async function submitEditProduct(e) {
         GhiChu: ghiChu
       };
 
-      const res = await fetch(state.gasUrl, {
+      const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
@@ -1386,7 +1517,7 @@ function deleteProduct(maSP, tenSP = '') {
 
       try {
         if (state.gasUrl) {
-          const res = await fetch(state.gasUrl, {
+          const res = await fetchWithTimeout(state.gasUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
@@ -1465,7 +1596,7 @@ async function submitNewProduct(e) {
         GhiChu: ghiChu
       };
 
-      const res = await fetch(state.gasUrl, {
+      const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
@@ -1669,6 +1800,16 @@ function saveSettings() {
   const cloudName = document.getElementById('config-cloud-name').value.trim();
   const uploadPreset = document.getElementById('config-upload-preset').value.trim();
 
+  if (gasUrl && gasUrl.includes('/macros/library')) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Link không hợp lệ',
+      html: 'Đây là link <b>Thư viện (Library)</b>, không phải link <b>Ứng dụng web (Web App)</b>!<br><br>Link đúng phải có dạng: <code>https://script.google.com/macros/s/.../exec</code>',
+      confirmButtonColor: '#3b82f6'
+    });
+    return;
+  }
+
   state.gasUrl = gasUrl;
   state.cloudName = cloudName;
   state.uploadPreset = uploadPreset;
@@ -1851,7 +1992,7 @@ async function submitAddUser(e) {
 
   try {
     if (state.gasUrl) {
-      const res = await fetch(state.gasUrl, {
+      const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
@@ -1946,7 +2087,7 @@ function deleteUser(targetUsername, targetRole) {
 
       try {
         if (state.gasUrl) {
-          const res = await fetch(state.gasUrl, {
+          const res = await fetchWithTimeout(state.gasUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
@@ -2064,7 +2205,7 @@ async function submitChangePassword(e) {
 
   try {
     if (state.gasUrl) {
-      const res = await fetch(state.gasUrl, {
+      const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
