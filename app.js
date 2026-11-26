@@ -245,6 +245,8 @@ let state = {
   users: [], // Danh sách tài khoản người dùng
   currentTab: 'dashboard',
   selectedCategory: 'ALL', // 'ALL', 'Thùng (Box)', 'Pallet', 'Spool quấn cáp'
+  selectedWOFilter: 'ALL', // 'ALL', 'CHUA_PHAT', 'CHUA_DU', 'DA_DU'
+  editingWOTarget: null, // null = tạo WO mới, string MaWO = thêm vật tư vào WO đã có
   transType: 'XUAT',
   gasUrl: localStorage.getItem('smartkho_gas_url') || DEFAULT_CONFIG.gasUrl || '',
   cloudName: localStorage.getItem('smartkho_cloud_name') || DEFAULT_CONFIG.cloudName || 'awimwhb3',
@@ -970,16 +972,82 @@ function getWOItemCategoryLabel(maSP) {
   return sp ? sp.DanhMuc : '';
 }
 
+function getWOStatusKey(wo) {
+  const items = Array.isArray(wo.items) ? wo.items : [];
+  const iss = Number(wo.SoLuongDaPhat) || 0;
+  const rem = Number(wo.SoLuongConLai) || 0;
+  if (rem <= 0 && items.length > 0) return 'DA_DU';
+  if (iss > 0) return 'CHUA_DU';
+  return 'CHUA_PHAT';
+}
+
+function setWOFilter(status) {
+  state.selectedWOFilter = status;
+  document.querySelectorAll('.wo-filter-pill').forEach(btn => {
+    btn.className = 'wo-filter-pill px-3 py-2 rounded-xl text-xs font-semibold transition bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap';
+  });
+  const activeBtn = document.getElementById(`wo-filter-${status}`);
+  if (activeBtn) {
+    activeBtn.className = 'wo-filter-pill px-3 py-2 rounded-xl text-xs font-bold transition bg-amber-500 text-white shadow-sm whitespace-nowrap';
+  }
+  renderWorkOrders();
+}
+
 function renderWorkOrders() {
   const container = document.getElementById('wo-cards-grid');
   container.innerHTML = '';
+
+  // Cập nhật số lượng trên các nút lọc trạng thái
+  const counts = { ALL: state.workOrders.length, CHUA_PHAT: 0, CHUA_DU: 0, DA_DU: 0 };
+  state.workOrders.forEach(wo => {
+    counts[getWOStatusKey(wo)]++;
+  });
+  Object.keys(counts).forEach(k => {
+    const el = document.getElementById(`wo-count-${k}`);
+    if (el) el.textContent = counts[k];
+  });
 
   if (state.workOrders.length === 0) {
     container.innerHTML = '<p class="col-span-full text-center py-10 text-slate-400 text-sm">Chưa có Lệnh Work Order nào</p>';
     return;
   }
 
-  state.workOrders.forEach(wo => {
+  const searchInput = document.getElementById('wo-search-input');
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  const filterKey = state.selectedWOFilter || 'ALL';
+
+  const filtered = state.workOrders.filter(wo => {
+    const statusKey = getWOStatusKey(wo);
+    if (filterKey !== 'ALL' && statusKey !== filterKey) return false;
+    if (!query) return true;
+
+    const items = Array.isArray(wo.items) ? wo.items : [];
+    const matchHeader = (wo.MaWO || '').toLowerCase().includes(query) ||
+                        (wo.GhiChu || '').toLowerCase().includes(query);
+    const matchItems = items.some(it =>
+      (it.MaSP || '').toLowerCase().includes(query) ||
+      (it.TenSP || '').toLowerCase().includes(query)
+    );
+    return matchHeader || matchItems;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p class="col-span-full text-center py-10 text-slate-400 text-sm">Không tìm thấy Lệnh Work Order phù hợp</p>';
+    return;
+  }
+
+  // Sắp xếp: WO chưa nhận đủ lên trước, WO đã nhận đủ ra sau
+  const sorted = [...filtered].sort((a, b) => {
+    const aDone = getWOStatusKey(a) === 'DA_DU' ? 1 : 0;
+    const bDone = getWOStatusKey(b) === 'DA_DU' ? 1 : 0;
+    return aDone - bDone;
+  });
+
+  const userRole = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+  const canManageWO = userRole === 'ADMIN' || userRole === 'THU_KHO';
+  const isAdmin = userRole === 'ADMIN';
+
+  sorted.forEach(wo => {
     const items = Array.isArray(wo.items) ? wo.items : [];
     const req = Number(wo.SoLuongYeuCau) || 0;
     const iss = Number(wo.SoLuongDaPhat) || 0;
@@ -1031,7 +1099,7 @@ function renderWorkOrders() {
             <span class="text-[11px] font-semibold text-slate-500">${items.length} vật tư</span>
           </div>
           <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${isCompleted ? 'bg-emerald-100 text-emerald-800' : (iss > 0 ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')}">
-            ${isCompleted ? '✓ Đã nhận đủ' : (iss > 0 ? `Đang phát (${pct}%)` : 'Chưa phát')}
+            ${isCompleted ? '✓ Đã nhận đủ' : (iss > 0 ? `Chưa đủ (${pct}%)` : 'Chưa phát')}
           </span>
         </div>
 
@@ -1042,21 +1110,35 @@ function renderWorkOrders() {
         </div>
       </div>
 
-      <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
         <span class="text-[11px] text-slate-400 font-mono">${wo.NgayTao ? wo.NgayTao.split(' ')[0] : ''}</span>
-        ${isCompleted ? `
-          <button disabled class="px-3 py-1.5 rounded-xl bg-slate-200 text-slate-400 text-xs font-bold cursor-not-allowed">
-            Đã đủ định mức
-          </button>
-        ` : `
-          <button onclick="dispatchToWO('${wo.MaWO}')" class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1 shadow-sm">
-            <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i> Cấp phát ngay
-          </button>
-        `}
+        <div class="flex items-center gap-1.5">
+          ${isAdmin ? `
+            <button onclick="deleteWorkOrder('${wo.MaWO}')" title="Xóa Work Order (Chỉ Admin)" class="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition flex items-center justify-center">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          ` : ''}
+          ${canManageWO ? `
+            <button onclick="openAddWOItemModal('${wo.MaWO}')" title="Thêm vật tư vào WO này" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800 text-xs font-bold transition flex items-center gap-1">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm VT
+            </button>
+          ` : ''}
+          ${isCompleted ? `
+            <button disabled class="px-3 py-1.5 rounded-xl bg-slate-200 text-slate-400 text-xs font-bold cursor-not-allowed">
+              Đã đủ định mức
+            </button>
+          ` : `
+            <button onclick="dispatchToWO('${wo.MaWO}')" class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1 shadow-sm">
+              <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i> Cấp phát
+            </button>
+          `}
+        </div>
       </div>
     `;
     container.appendChild(card);
   });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function dispatchToWO(maWO) {
@@ -1303,16 +1385,25 @@ function validateTransactionQuantity() {
   }
 }
 
-// 4. TẠO WORK ORDER MỚI (NHIỀU VẬT TƯ: THÙNG, SPOOL, PALLET)
+// 4. TẠO WORK ORDER MỚI & THÊM VẬT TƯ VÀO WO ĐÃ CÓ
 function addNewWOItemRow(presetMaSP = '', presetQty = '') {
   const container = document.getElementById('new-wo-items-container');
   const row = document.createElement('div');
   row.className = 'new-wo-item-row flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200';
 
+  let existingSPSet = new Set();
+  if (state.editingWOTarget) {
+    const existingWO = state.workOrders.find(w => w.MaWO.toUpperCase() === state.editingWOTarget.toUpperCase());
+    if (existingWO && Array.isArray(existingWO.items)) {
+      existingWO.items.forEach(it => existingSPSet.add(String(it.MaSP || '').toUpperCase()));
+    }
+  }
+
   const optionsHtml = ['<option value="">-- Chọn Thùng / Pallet / Spool --</option>']
-    .concat(state.sanPham.map(item =>
-      `<option value="${item.MaSP}" ${item.MaSP === presetMaSP ? 'selected' : ''}>[${item.DanhMuc}] ${item.TenSP} (${item.MaSP})</option>`
-    )).join('');
+    .concat(state.sanPham.map(item => {
+      const alreadyInWO = existingSPSet.has(item.MaSP.toUpperCase());
+      return `<option value="${item.MaSP}" ${item.MaSP === presetMaSP ? 'selected' : ''} ${alreadyInWO ? 'disabled' : ''}>[${item.DanhMuc}] ${item.TenSP} (${item.MaSP})${alreadyInWO ? ' - Đã có trong WO' : ''}</option>`;
+    })).join('');
 
   row.innerHTML = `
     <select required class="new-wo-item-select flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-amber-500">
@@ -1330,7 +1421,7 @@ function addNewWOItemRow(presetMaSP = '', presetQty = '') {
 function removeNewWOItemRow(btn) {
   const container = document.getElementById('new-wo-items-container');
   if (container.querySelectorAll('.new-wo-item-row').length <= 1) {
-    Swal.fire({ toast: true, icon: 'info', title: 'Mỗi WO phải có ít nhất 1 vật tư', timer: 1800, position: 'top' });
+    Swal.fire({ toast: true, icon: 'info', title: 'Phải có ít nhất 1 vật tư', timer: 1800, position: 'top' });
     return;
   }
   btn.closest('.new-wo-item-row').remove();
@@ -1342,7 +1433,38 @@ function openAddWOModal() {
     Swal.fire('Hạn chế quyền', 'Chỉ Quản trị viên và Thủ kho mới có quyền tạo Lệnh Work Order mới!', 'info');
     return;
   }
+  state.editingWOTarget = null;
   document.getElementById('form-add-wo').reset();
+  document.getElementById('modal-add-wo-title').innerHTML = '<i data-lucide="clipboard-plus" class="w-5 h-5 text-amber-600"></i> Tạo Lệnh Work Order (WO) Mới';
+  const woIdInput = document.getElementById('new-wo-id');
+  woIdInput.readOnly = false;
+  woIdInput.classList.remove('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+  document.getElementById('new-wo-note-group').classList.remove('hidden');
+  document.getElementById('btn-submit-wo').textContent = 'Lưu Lệnh WO';
+
+  const container = document.getElementById('new-wo-items-container');
+  container.innerHTML = '';
+  addNewWOItemRow();
+  document.getElementById('modal-add-wo').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function openAddWOItemModal(maWO) {
+  const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
+  if (role !== 'ADMIN' && role !== 'THU_KHO') {
+    Swal.fire('Hạn chế quyền', 'Chỉ Quản trị viên và Thủ kho mới có quyền thêm vật tư vào WO!', 'info');
+    return;
+  }
+  state.editingWOTarget = maWO;
+  document.getElementById('form-add-wo').reset();
+  document.getElementById('modal-add-wo-title').innerHTML = `<i data-lucide="package-plus" class="w-5 h-5 text-amber-600"></i> Thêm vật tư vào ${maWO}`;
+  const woIdInput = document.getElementById('new-wo-id');
+  woIdInput.value = maWO;
+  woIdInput.readOnly = true;
+  woIdInput.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+  document.getElementById('new-wo-note-group').classList.add('hidden');
+  document.getElementById('btn-submit-wo').textContent = 'Thêm vào WO';
+
   const container = document.getElementById('new-wo-items-container');
   container.innerHTML = '';
   addNewWOItemRow();
@@ -1351,13 +1473,69 @@ function openAddWOModal() {
 }
 
 function closeAddWOModal() {
+  state.editingWOTarget = null;
   document.getElementById('modal-add-wo').classList.add('hidden');
+}
+
+async function deleteWorkOrder(maWO) {
+  const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : '';
+  if (role !== 'ADMIN') {
+    Swal.fire('Hạn chế quyền', '⛔ Chỉ tài khoản Quản trị viên (ADMIN) mới có quyền xóa Work Order!', 'error');
+    return;
+  }
+
+  const confirm = await Swal.fire({
+    title: `Xóa Work Order [${maWO}]?`,
+    text: 'Toàn bộ vật tư và tiến độ thuộc lệnh WO này sẽ bị xóa vĩnh viễn khỏi Google Sheet!',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#dc2626',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Xóa vĩnh viễn',
+    cancelButtonText: 'Hủy'
+  });
+
+  if (!confirm.isConfirmed) return;
+
+  Swal.fire({
+    title: `Đang xóa ${maWO}...`,
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  try {
+    if (state.gasUrl) {
+      const res = await fetchWithTimeout(state.gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'xoa_work_order',
+          userRole: 'ADMIN',
+          MaWO: maWO
+        })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        Swal.fire('Lỗi', data.message || 'Không thể xóa Work Order', 'error');
+        return;
+      }
+      await loadDataFromSheets();
+    } else {
+      state.workOrders = state.workOrders.filter(w => w.MaWO.toUpperCase() !== String(maWO).toUpperCase());
+      renderAllViews();
+    }
+
+    Swal.fire('Đã xóa!', `Work Order [${maWO}] đã được xóa khỏi hệ thống.`, 'success');
+  } catch (err) {
+    Swal.fire('Lỗi', err.message, 'error');
+  }
 }
 
 async function submitNewWorkOrder(e) {
   e.preventDefault();
 
-  const maWO = document.getElementById('new-wo-id').value.trim().toUpperCase();
+  const isAddingToExisting = Boolean(state.editingWOTarget);
+  const maWO = (state.editingWOTarget || document.getElementById('new-wo-id').value).trim().toUpperCase();
   const note = document.getElementById('new-wo-note').value.trim();
   const rows = Array.from(document.querySelectorAll('#new-wo-items-container .new-wo-item-row'));
 
@@ -1371,7 +1549,7 @@ async function submitNewWorkOrder(e) {
       return;
     }
     if (seen.has(maSP.toUpperCase())) {
-      Swal.fire('Trùng vật tư', `Mã [${maSP}] đang bị chọn lặp lại trong cùng một WO!`, 'warning');
+      Swal.fire('Trùng vật tư', `Mã [${maSP}] đang bị chọn lặp lại!`, 'warning');
       return;
     }
     seen.add(maSP.toUpperCase());
@@ -1384,60 +1562,96 @@ async function submitNewWorkOrder(e) {
   }
 
   Swal.fire({
-    title: 'Đang tạo Lệnh Work Order...',
+    title: isAddingToExisting ? `Đang thêm vật tư vào ${maWO}...` : 'Đang tạo Lệnh Work Order...',
     allowOutsideClick: false,
     didOpen: () => Swal.showLoading()
   });
 
   try {
     if (state.gasUrl) {
+      const userRole = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : '';
       const res = await fetchWithTimeout(state.gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'them_work_order',
-          MaWO: maWO,
-          Items: items,
-          GhiChu: note
-        })
+        body: JSON.stringify(
+          isAddingToExisting
+            ? { action: 'them_item_work_order', userRole, MaWO: maWO, Items: items }
+            : { action: 'them_work_order', userRole, MaWO: maWO, Items: items, GhiChu: note }
+        )
       });
       const data = await res.json();
       if (!data.success) {
-        Swal.fire('Lỗi', data.message || 'Không thể tạo WO', 'error');
+        Swal.fire('Lỗi', data.message || 'Không thể lưu WO', 'error');
         return;
       }
       await loadDataFromSheets();
     } else {
-      if (state.workOrders.some(w => w.MaWO.toUpperCase() === maWO)) {
-        Swal.fire('Lỗi', `Mã Work Order ${maWO} đã tồn tại!`, 'error');
-        return;
-      }
-      const woItems = items.map(it => {
-        const sp = state.sanPham.find(i => i.MaSP === it.MaSP);
-        return {
-          MaSP: it.MaSP,
-          TenSP: sp ? sp.TenSP : it.MaSP,
-          SoLuongYeuCau: it.SoLuongYeuCau,
+      if (isAddingToExisting) {
+        const existingWO = state.workOrders.find(w => w.MaWO.toUpperCase() === maWO);
+        if (!existingWO) {
+          Swal.fire('Lỗi', `Không tìm thấy Work Order ${maWO}!`, 'error');
+          return;
+        }
+        for (const it of items) {
+          if ((existingWO.items || []).some(eItem => eItem.MaSP.toUpperCase() === it.MaSP.toUpperCase())) {
+            Swal.fire('Trùng vật tư', `Vật tư [${it.MaSP}] đã có trong lệnh ${maWO}!`, 'warning');
+            return;
+          }
+        }
+        items.forEach(it => {
+          const sp = state.sanPham.find(i => i.MaSP === it.MaSP);
+          existingWO.items.push({
+            MaSP: it.MaSP,
+            TenSP: sp ? sp.TenSP : it.MaSP,
+            SoLuongYeuCau: it.SoLuongYeuCau,
+            SoLuongDaPhat: 0,
+            SoLuongConLai: it.SoLuongYeuCau,
+            TrangThai: 'Chưa cấp phát'
+          });
+        });
+        existingWO.SoLuongYeuCau = existingWO.items.reduce((s, i) => s + i.SoLuongYeuCau, 0);
+        existingWO.SoLuongDaPhat = existingWO.items.reduce((s, i) => s + i.SoLuongDaPhat, 0);
+        existingWO.SoLuongConLai = existingWO.items.reduce((s, i) => s + i.SoLuongConLai, 0);
+        existingWO.TrangThai = existingWO.SoLuongConLai === 0 ? 'Đã đủ' : (existingWO.SoLuongDaPhat > 0 ? 'Đang cấp phát' : 'Chưa cấp phát');
+        renderAllViews();
+      } else {
+        if (state.workOrders.some(w => w.MaWO.toUpperCase() === maWO)) {
+          Swal.fire('Lỗi', `Mã Work Order ${maWO} đã tồn tại!`, 'error');
+          return;
+        }
+        const woItems = items.map(it => {
+          const sp = state.sanPham.find(i => i.MaSP === it.MaSP);
+          return {
+            MaSP: it.MaSP,
+            TenSP: sp ? sp.TenSP : it.MaSP,
+            SoLuongYeuCau: it.SoLuongYeuCau,
+            SoLuongDaPhat: 0,
+            SoLuongConLai: it.SoLuongYeuCau,
+            TrangThai: 'Chưa cấp phát'
+          };
+        });
+        const totalReq = woItems.reduce((s, i) => s + i.SoLuongYeuCau, 0);
+        state.workOrders.unshift({
+          MaWO: maWO,
+          NgayTao: new Date().toLocaleString('vi-VN'),
+          GhiChu: note,
+          items: woItems,
+          SoLuongYeuCau: totalReq,
           SoLuongDaPhat: 0,
-          SoLuongConLai: it.SoLuongYeuCau,
+          SoLuongConLai: totalReq,
           TrangThai: 'Chưa cấp phát'
-        };
-      });
-      const totalReq = woItems.reduce((s, i) => s + i.SoLuongYeuCau, 0);
-      state.workOrders.unshift({
-        MaWO: maWO,
-        NgayTao: new Date().toLocaleString('vi-VN'),
-        GhiChu: note,
-        items: woItems,
-        SoLuongYeuCau: totalReq,
-        SoLuongDaPhat: 0,
-        SoLuongConLai: totalReq,
-        TrangThai: 'Chưa cấp phát'
-      });
-      renderAllViews();
+        });
+        renderAllViews();
+      }
     }
 
-    Swal.fire('Thành công', `Đã tạo Lệnh Work Order [${maWO}] gồm ${items.length} loại vật tư!`, 'success');
+    Swal.fire(
+      'Thành công',
+      isAddingToExisting
+        ? `Đã thêm ${items.length} vật tư vào lệnh [${maWO}]!`
+        : `Đã tạo Lệnh Work Order [${maWO}] gồm ${items.length} loại vật tư!`,
+      'success'
+    );
     closeAddWOModal();
     document.getElementById('form-add-wo').reset();
     switchTab('workorder');
