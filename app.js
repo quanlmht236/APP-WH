@@ -1150,6 +1150,14 @@ function dispatchToWO(maWO) {
   document.getElementById('trans-quantity').focus();
 }
 
+function formatShortOptionText(danhMuc, tenSP, maSP, extraText) {
+  const shortCat = (danhMuc || '').includes('Thùng') ? 'Thùng' : ((danhMuc || '').includes('Pallet') ? 'Pallet' : ((danhMuc || '').includes('Spool') ? 'Spool' : danhMuc));
+  const rawName = String(tenSP || maSP || '');
+  const shortName = rawName.length > 22 ? rawName.slice(0, 22) + '…' : rawName;
+  const prefix = shortCat ? `[${shortCat}] ` : '';
+  return `${prefix}${shortName} (${maSP})${extraText ? ' • ' + extraText : ''}`;
+}
+
 function populateTransProductSelect(woItems = null) {
   const spSelect = document.getElementById('trans-product-select');
   const prevValue = spSelect.value;
@@ -1158,19 +1166,18 @@ function populateTransProductSelect(woItems = null) {
   if (Array.isArray(woItems) && woItems.length > 0) {
     woItems.forEach(wItem => {
       const sp = state.sanPham.find(i => i.MaSP.toUpperCase() === wItem.MaSP.toUpperCase());
-      const tonText = sp ? `Tồn: ${sp.SoLuongTon}` : 'Chưa có tồn';
-      const catText = sp ? `[${sp.DanhMuc}] ` : '';
-      const statusText = wItem.SoLuongConLai <= 0 ? 'ĐÃ ĐỦ' : `WO thiếu: ${wItem.SoLuongConLai}`;
+      const tonText = sp ? `Tồn:${sp.SoLuongTon}` : 'Tồn:0';
+      const statusText = wItem.SoLuongConLai <= 0 ? 'ĐỦ' : `Thiếu:${wItem.SoLuongConLai}`;
       const opt = document.createElement('option');
       opt.value = sp ? sp.MaSP : wItem.MaSP;
-      opt.textContent = `${catText}${wItem.TenSP || wItem.MaSP} (${wItem.MaSP}) - ${tonText} | ${statusText}`;
+      opt.textContent = formatShortOptionText(sp ? sp.DanhMuc : '', wItem.TenSP || wItem.MaSP, wItem.MaSP, `${tonText} | ${statusText}`);
       spSelect.appendChild(opt);
     });
   } else {
     state.sanPham.forEach(item => {
       const opt = document.createElement('option');
       opt.value = item.MaSP;
-      opt.textContent = `[${item.DanhMuc}] ${item.TenSP} (${item.MaSP}) - Còn: ${item.SoLuongTon}`;
+      opt.textContent = formatShortOptionText(item.DanhMuc, item.TenSP, item.MaSP, `Còn: ${item.SoLuongTon}`);
       spSelect.appendChild(opt);
     });
   }
@@ -1190,10 +1197,9 @@ function renderTransactionSelects() {
   state.workOrders.forEach(w => {
     const items = Array.isArray(w.items) ? w.items : [];
     const isCompleted = w.SoLuongConLai <= 0 && items.length > 0;
-    const summaryNames = items.map(i => i.MaSP).join(', ');
     const opt = document.createElement('option');
     opt.value = w.MaWO;
-    opt.textContent = `${w.MaWO} (${items.length} vật tư: ${summaryNames}) - ${w.SoLuongDaPhat}/${w.SoLuongYeuCau}${isCompleted ? ' - ĐÃ ĐỦ' : ''}`;
+    opt.textContent = `${w.MaWO} (${items.length} VT • ${w.SoLuongDaPhat}/${w.SoLuongYeuCau}${isCompleted ? ' • ĐỦ' : ''})`;
     woSelect.appendChild(opt);
   });
 
@@ -1402,14 +1408,17 @@ function addNewWOItemRow(presetMaSP = '', presetQty = '') {
   const optionsHtml = ['<option value="">-- Chọn Thùng / Pallet / Spool --</option>']
     .concat(state.sanPham.map(item => {
       const alreadyInWO = existingSPSet.has(item.MaSP.toUpperCase());
-      return `<option value="${item.MaSP}" ${item.MaSP === presetMaSP ? 'selected' : ''} ${alreadyInWO ? 'disabled' : ''}>[${item.DanhMuc}] ${item.TenSP} (${item.MaSP})${alreadyInWO ? ' - Đã có trong WO' : ''}</option>`;
+      const label = formatShortOptionText(item.DanhMuc, item.TenSP, item.MaSP, alreadyInWO ? 'Đã có' : '');
+      return `<option value="${item.MaSP}" ${item.MaSP === presetMaSP ? 'selected' : ''} ${alreadyInWO ? 'disabled' : ''}>${label}</option>`;
     })).join('');
 
   row.innerHTML = `
-    <select required class="new-wo-item-select flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-amber-500">
-      ${optionsHtml}
-    </select>
-    <input type="number" min="1" required value="${presetQty}" placeholder="SL" class="new-wo-item-qty w-20 px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-bold text-center focus:ring-2 focus:ring-amber-500 bg-white">
+    <div class="flex-1 min-w-0">
+      <select required class="new-wo-item-select w-full truncate px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-amber-500">
+        ${optionsHtml}
+      </select>
+    </div>
+    <input type="number" min="1" required value="${presetQty}" placeholder="SL" class="new-wo-item-qty w-16 sm:w-20 shrink-0 px-2 py-2 rounded-lg border border-slate-200 text-xs font-bold text-center focus:ring-2 focus:ring-amber-500 bg-white">
     <button type="button" onclick="removeNewWOItemRow(this)" title="Xóa dòng" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition shrink-0">
       <i data-lucide="trash-2" class="w-4 h-4"></i>
     </button>
