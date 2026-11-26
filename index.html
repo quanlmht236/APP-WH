@@ -167,7 +167,7 @@
         </div>
         <div class="min-w-0">
           <span class="font-bold text-slate-800 text-sm block leading-tight truncate">SmartKho</span>
-          <span id="mobile-user-tag" class="text-[10px] text-slate-500 font-medium block truncate max-w-[90px]">Khách</span>
+          <span id="mobile-user-tag" class="text-[10px] text-slate-500 font-medium block truncate max-w-[72px] sm:max-w-[110px]">Khách</span>
         </div>
       </div>
 
@@ -177,19 +177,19 @@
 
       <div class="flex items-center gap-1 sm:gap-2 shrink-0">
         <!-- Nút quét mã QR / Barcode nhanh -->
-        <button onclick="openScannerModal()" class="flex items-center gap-1 px-2.5 sm:px-3 py-2 rounded-xl bg-blue-50 text-blue-600 font-semibold text-xs md:text-sm hover:bg-blue-100 transition shadow-sm border border-blue-200">
+        <button onclick="openScannerModal()" class="flex items-center gap-1 p-2 sm:px-3 sm:py-2 rounded-xl bg-blue-50 text-blue-600 font-semibold text-xs md:text-sm hover:bg-blue-100 transition shadow-sm border border-blue-200">
           <i data-lucide="scan-barcode" class="w-4 h-4"></i>
           <span class="hidden sm:inline">Quét mã</span>
         </button>
 
-        <!-- Nút tạo Work Order mới (Admin & Thủ kho) -->
-        <button onclick="openAddWOModal()" class="role-manager-only flex items-center gap-1 px-2.5 sm:px-3 py-2 rounded-xl bg-amber-50 text-amber-700 font-semibold text-xs md:text-sm hover:bg-amber-100 transition border border-amber-300">
+        <!-- Nút tạo Work Order mới (Tất cả nhân sự đã đăng nhập) -->
+        <button onclick="openAddWOModal()" class="flex items-center gap-1 p-2 sm:px-3 sm:py-2 rounded-xl bg-amber-50 text-amber-700 font-semibold text-xs md:text-sm hover:bg-amber-100 transition border border-amber-300">
           <i data-lucide="file-plus" class="w-4 h-4"></i>
           <span class="hidden sm:inline">Tạo WO</span>
         </button>
 
         <!-- Nút thêm quy cách mới (Admin & Thủ kho) -->
-        <button onclick="openAddProductModal()" id="btn-add-product-header" class="role-manager-only flex items-center gap-1 px-2.5 sm:px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold text-xs md:text-sm hover:bg-blue-700 transition shadow-md shadow-blue-500/25">
+        <button onclick="openAddProductModal()" id="btn-add-product-header" class="role-manager-only flex items-center gap-1 p-2 sm:px-3 sm:py-2 rounded-xl bg-blue-600 text-white font-semibold text-xs md:text-sm hover:bg-blue-700 transition shadow-md shadow-blue-500/25">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span class="hidden sm:inline">Thêm mã</span>
         </button>
@@ -223,52 +223,52 @@
       <!-- ==================== TAB 1: DASHBOARD (CHUYÊN BIỆT 3 THỨ: THÙNG, PALLET, SPOOL) ==================== -->
       <section id="tab-dashboard" class="tab-pane space-y-6">
         <!-- 3 Cards Thống Kê Tồn Kho Của 3 Loại Chính + 1 Card WO -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-5">
           <!-- Card 1: Thùng (Box) -->
-          <div onclick="filterByCategoryQuick('Thùng (Box)')" class="bg-white p-4 md:p-5 rounded-2xl border border-blue-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-500 transition">
-            <div>
-              <p class="text-xs font-semibold text-blue-600">📦 Thùng (Box)</p>
-              <h3 id="stat-stock-box" class="text-2xl font-extrabold text-slate-800 mt-1">0</h3>
-              <p class="text-[10px] text-slate-400 mt-0.5">Thùng carton, thùng nhựa</p>
+          <div onclick="filterByCategoryQuick('Thùng (Box)')" class="bg-white p-3 sm:p-4 md:p-5 rounded-2xl border border-blue-200/80 shadow-sm flex items-center justify-between gap-2 cursor-pointer hover:border-blue-500 transition">
+            <div class="min-w-0">
+              <p class="text-[11px] sm:text-xs font-semibold text-blue-600 truncate">📦 Thùng (Box)</p>
+              <h3 id="stat-stock-box" class="text-xl sm:text-2xl font-extrabold text-slate-800 mt-0.5 sm:mt-1">0</h3>
+              <p class="text-[10px] text-slate-400 mt-0.5 truncate">Thùng carton, nhựa</p>
             </div>
-            <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <i data-lucide="package" class="w-6 h-6"></i>
+            <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <i data-lucide="package" class="w-5 h-5 sm:w-6 sm:h-6"></i>
             </div>
           </div>
 
           <!-- Card 2: Pallet -->
-          <div onclick="filterByCategoryQuick('Pallet')" class="bg-white p-4 md:p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500 transition">
-            <div>
-              <p class="text-xs font-semibold text-amber-700">🪵 Pallet</p>
-              <h3 id="stat-stock-pallet" class="text-2xl font-extrabold text-slate-800 mt-1">0</h3>
-              <p class="text-[10px] text-slate-400 mt-0.5">Pallet gỗ, pallet nhựa</p>
+          <div onclick="filterByCategoryQuick('Pallet')" class="bg-white p-3 sm:p-4 md:p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center justify-between gap-2 cursor-pointer hover:border-amber-500 transition">
+            <div class="min-w-0">
+              <p class="text-[11px] sm:text-xs font-semibold text-amber-700 truncate">🪵 Pallet</p>
+              <h3 id="stat-stock-pallet" class="text-xl sm:text-2xl font-extrabold text-slate-800 mt-0.5 sm:mt-1">0</h3>
+              <p class="text-[10px] text-slate-400 mt-0.5 truncate">Pallet gỗ, nhựa</p>
             </div>
-            <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-              <i data-lucide="layers" class="w-6 h-6"></i>
+            <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+              <i data-lucide="layers" class="w-5 h-5 sm:w-6 sm:h-6"></i>
             </div>
           </div>
 
           <!-- Card 3: Spool quấn cáp -->
-          <div onclick="filterByCategoryQuick('Spool quấn cáp')" class="bg-white p-4 md:p-5 rounded-2xl border border-indigo-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-indigo-500 transition">
-            <div>
-              <p class="text-xs font-semibold text-indigo-600">🧶 Spool Quấn Cáp</p>
-              <h3 id="stat-stock-spool" class="text-2xl font-extrabold text-slate-800 mt-1">0</h3>
-              <p class="text-[10px] text-slate-400 mt-0.5">Rulo gỗ, nhựa, thép</p>
+          <div onclick="filterByCategoryQuick('Spool quấn cáp')" class="bg-white p-3 sm:p-4 md:p-5 rounded-2xl border border-indigo-200/80 shadow-sm flex items-center justify-between gap-2 cursor-pointer hover:border-indigo-500 transition">
+            <div class="min-w-0">
+              <p class="text-[11px] sm:text-xs font-semibold text-indigo-600 truncate">🧶 Spool Cáp</p>
+              <h3 id="stat-stock-spool" class="text-xl sm:text-2xl font-extrabold text-slate-800 mt-0.5 sm:mt-1">0</h3>
+              <p class="text-[10px] text-slate-400 mt-0.5 truncate">Rulo gỗ, nhựa, thép</p>
             </div>
-            <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <i data-lucide="disc" class="w-6 h-6"></i>
+            <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <i data-lucide="disc" class="w-5 h-5 sm:w-6 sm:h-6"></i>
             </div>
           </div>
 
           <!-- Card 4: Work Order đang cấp -->
-          <div onclick="switchTab('workorder')" class="bg-white p-4 md:p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-500 transition">
-            <div>
-              <p class="text-xs font-semibold text-emerald-700">📋 Lệnh WO Đang Phát</p>
-              <h3 id="stat-active-wo" class="text-2xl font-extrabold text-emerald-600 mt-1">0</h3>
-              <p class="text-[10px] text-slate-400 mt-0.5">Bấm để xem đối soát WO</p>
+          <div onclick="switchTab('workorder')" class="bg-white p-3 sm:p-4 md:p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center justify-between gap-2 cursor-pointer hover:border-emerald-500 transition">
+            <div class="min-w-0">
+              <p class="text-[11px] sm:text-xs font-semibold text-emerald-700 truncate">📋 WO Đang Phát</p>
+              <h3 id="stat-active-wo" class="text-xl sm:text-2xl font-extrabold text-emerald-600 mt-0.5 sm:mt-1">0</h3>
+              <p class="text-[10px] text-slate-400 mt-0.5 truncate">Xem đối soát WO</p>
             </div>
-            <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <i data-lucide="clipboard-list" class="w-6 h-6"></i>
+            <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <i data-lucide="clipboard-list" class="w-5 h-5 sm:w-6 sm:h-6"></i>
             </div>
           </div>
         </div>
@@ -307,7 +307,7 @@
             <p class="text-xs text-slate-500">Đối soát định mức cấp phát, hệ thống tự động khóa khi lệnh đã nhận đủ</p>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="openAddWOModal()" class="role-manager-only px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+            <button onclick="openAddWOModal()" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
               <i data-lucide="plus" class="w-4 h-4"></i> Tạo Lệnh WO Mới
             </button>
             <button onclick="loadDataFromSheets()" class="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 flex items-center gap-1">
@@ -376,19 +376,19 @@
 
       <!-- ==================== TAB 3: TRANSACTION (XUẤT THEO WO / NHẬP KHO) ==================== -->
       <section id="tab-transaction" class="tab-pane hidden max-w-2xl mx-auto">
-        <div class="bg-white p-5 md:p-7 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+        <div class="bg-white p-4 sm:p-5 md:p-7 rounded-2xl border border-slate-200/80 shadow-sm space-y-4 sm:space-y-5">
           <div class="text-center">
-            <h3 class="text-lg md:text-xl font-bold text-slate-800">Cấp Phát & Nhập Kho Vật Tư</h3>
-            <p class="text-xs text-slate-500 mt-1">Xuất kho Thùng / Pallet / Spool theo Lệnh WO (Tự động chặn khi đủ)</p>
+            <h3 class="text-base sm:text-lg md:text-xl font-bold text-slate-800">Cấp Phát & Nhập Kho Vật Tư</h3>
+            <p class="text-[11px] sm:text-xs text-slate-500 mt-1">Xuất kho Thùng / Pallet / Spool theo Lệnh WO (Tự động chặn khi đủ)</p>
           </div>
 
           <!-- Chọn loại giao dịch -->
-          <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl">
-            <button type="button" id="btn-type-nhap" onclick="selectTransactionType('NHAP')" class="py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900">
-              <i data-lucide="arrow-down-left" class="w-4 h-4"></i> Nhập kho trả về (+)
+          <div class="grid grid-cols-2 gap-1.5 sm:gap-2 p-1.5 bg-slate-100 rounded-xl">
+            <button type="button" id="btn-type-nhap" onclick="selectTransactionType('NHAP')" class="py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900 whitespace-nowrap">
+              <i data-lucide="arrow-down-left" class="w-4 h-4 shrink-0"></i> Nhập kho (+)
             </button>
-            <button type="button" id="btn-type-xuat" onclick="selectTransactionType('XUAT')" class="py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 bg-rose-600 text-white shadow-sm">
-              <i data-lucide="arrow-up-right" class="w-4 h-4"></i> Xuất cấp theo WO (-)
+            <button type="button" id="btn-type-xuat" onclick="selectTransactionType('XUAT')" class="py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 bg-rose-600 text-white shadow-sm whitespace-nowrap">
+              <i data-lucide="arrow-up-right" class="w-4 h-4 shrink-0"></i> Xuất theo WO (-)
             </button>
           </div>
 

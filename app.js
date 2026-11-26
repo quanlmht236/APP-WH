@@ -1044,7 +1044,7 @@ function renderWorkOrders() {
   });
 
   const userRole = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
-  const canManageWO = userRole === 'ADMIN' || userRole === 'THU_KHO';
+  const canEditWO = Boolean(state.currentUser);
   const isAdmin = userRole === 'ADMIN';
 
   sorted.forEach(wo => {
@@ -1118,7 +1118,7 @@ function renderWorkOrders() {
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </button>
           ` : ''}
-          ${canManageWO ? `
+          ${canEditWO ? `
             <button onclick="openAddWOItemModal('${wo.MaWO}')" title="Thêm vật tư vào WO này" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800 text-xs font-bold transition flex items-center gap-1">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i> Thêm VT
             </button>
@@ -1153,9 +1153,9 @@ function dispatchToWO(maWO) {
 function formatShortOptionText(danhMuc, tenSP, maSP, extraText) {
   const shortCat = (danhMuc || '').includes('Thùng') ? 'Thùng' : ((danhMuc || '').includes('Pallet') ? 'Pallet' : ((danhMuc || '').includes('Spool') ? 'Spool' : danhMuc));
   const rawName = String(tenSP || maSP || '');
-  const shortName = rawName.length > 22 ? rawName.slice(0, 22) + '…' : rawName;
+  const shortName = rawName.length > 15 ? rawName.slice(0, 15) + '…' : rawName;
   const prefix = shortCat ? `[${shortCat}] ` : '';
-  return `${prefix}${shortName} (${maSP})${extraText ? ' • ' + extraText : ''}`;
+  return `${prefix}${maSP} - ${shortName}${extraText ? ' • ' + extraText : ''}`;
 }
 
 function populateTransProductSelect(woItems = null) {
@@ -1437,9 +1437,8 @@ function removeNewWOItemRow(btn) {
 }
 
 function openAddWOModal() {
-  const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
-  if (role !== 'ADMIN' && role !== 'THU_KHO') {
-    Swal.fire('Hạn chế quyền', 'Chỉ Quản trị viên và Thủ kho mới có quyền tạo Lệnh Work Order mới!', 'info');
+  if (!state.currentUser) {
+    Swal.fire('Chưa đăng nhập', 'Vui lòng đăng nhập để tạo Lệnh Work Order mới!', 'info');
     return;
   }
   state.editingWOTarget = null;
@@ -1459,9 +1458,8 @@ function openAddWOModal() {
 }
 
 function openAddWOItemModal(maWO) {
-  const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
-  if (role !== 'ADMIN' && role !== 'THU_KHO') {
-    Swal.fire('Hạn chế quyền', 'Chỉ Quản trị viên và Thủ kho mới có quyền thêm vật tư vào WO!', 'info');
+  if (!state.currentUser) {
+    Swal.fire('Chưa đăng nhập', 'Vui lòng đăng nhập để thêm vật tư vào WO!', 'info');
     return;
   }
   state.editingWOTarget = maWO;
@@ -1682,15 +1680,15 @@ function selectTransactionType(type) {
   qtyInput.disabled = false;
 
   if (type === 'NHAP') {
-    btnNhap.className = 'py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-sm';
-    btnXuat.className = 'py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900';
+    btnNhap.className = 'py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-sm whitespace-nowrap';
+    btnXuat.className = 'py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900 whitespace-nowrap';
     btnSubmit.className = 'w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2';
     submitText.textContent = 'Xác nhận Nhập kho trả về (+)';
     woBox.classList.add('hidden');
     document.getElementById('trans-qty-limit-hint').textContent = '';
   } else {
-    btnXuat.className = 'py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 bg-rose-600 text-white shadow-sm';
-    btnNhap.className = 'py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900';
+    btnXuat.className = 'py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 bg-rose-600 text-white shadow-sm whitespace-nowrap';
+    btnNhap.className = 'py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900 whitespace-nowrap';
     btnSubmit.className = 'w-full py-3 rounded-xl bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2';
     submitText.textContent = 'Xác nhận Xuất cấp theo WO (-)';
     woBox.classList.remove('hidden');
