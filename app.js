@@ -131,40 +131,80 @@ const DEMO_PRODUCTS = [
   }
 ];
 
-// Dữ liệu mẫu Work Orders (Lệnh cấp phát Thùng/Pallet/Spool)
+// Dữ liệu mẫu Work Orders (1 WO có thể đồng thời gồm Thùng, Spool, Pallet)
 const DEMO_WORK_ORDERS = [
   {
     MaWO: "WO-CABLE-001",
-    MaSP: "SPL-WOOD-800",
-    TenSP: "Spool gỗ Ø800mm quấn cáp điện lực",
-    SoLuongYeuCau: 30,
-    SoLuongDaPhat: 10,
-    SoLuongConLai: 20,
-    TrangThai: "Đang cấp phát",
     NgayTao: "2026-11-24 08:30:00",
-    GhiChu: "Cấp cho Chuyền bọc vỏ cáp số 1 (Còn thiếu 20)"
+    GhiChu: "Cấp cho Chuyền bọc vỏ cáp số 1 (Đủ bộ Spool + Thùng + Pallet)",
+    items: [
+      {
+        MaSP: "SPL-WOOD-800",
+        TenSP: "Spool gỗ Ø800mm quấn cáp điện lực",
+        SoLuongYeuCau: 30,
+        SoLuongDaPhat: 10,
+        SoLuongConLai: 20,
+        TrangThai: "Đang cấp phát"
+      },
+      {
+        MaSP: "BOX-305M",
+        TenSP: "Thùng carton đóng cáp 305m (5 lớp)",
+        SoLuongYeuCau: 50,
+        SoLuongDaPhat: 20,
+        SoLuongConLai: 30,
+        TrangThai: "Đang cấp phát"
+      },
+      {
+        MaSP: "PAL-WO-1111",
+        TenSP: "Pallet gỗ 1100x1100mm đóng hàng",
+        SoLuongYeuCau: 10,
+        SoLuongDaPhat: 0,
+        SoLuongConLai: 10,
+        TrangThai: "Chưa cấp phát"
+      }
+    ],
+    SoLuongYeuCau: 90,
+    SoLuongDaPhat: 30,
+    SoLuongConLai: 60,
+    TrangThai: "Đang cấp phát"
   },
   {
     MaWO: "WO-CABLE-002",
-    MaSP: "BOX-305M",
-    TenSP: "Thùng carton đóng cáp 305m (5 lớp)",
+    NgayTao: "2026-11-23 10:00:00",
+    GhiChu: "Cấp đóng gói đơn hàng dự án (ĐÃ ĐỦ 100/100 - CHẶN PHÁT THÊM)",
+    items: [
+      {
+        MaSP: "BOX-305M",
+        TenSP: "Thùng carton đóng cáp 305m (5 lớp)",
+        SoLuongYeuCau: 100,
+        SoLuongDaPhat: 100,
+        SoLuongConLai: 0,
+        TrangThai: "Đã đủ"
+      }
+    ],
     SoLuongYeuCau: 100,
     SoLuongDaPhat: 100,
     SoLuongConLai: 0,
-    TrangThai: "Đã đủ",
-    NgayTao: "2026-11-23 10:00:00",
-    GhiChu: "Cấp đóng gói đơn hàng dự án (ĐÃ ĐỦ 100/100 - CHẶN PHÁT THÊM)"
+    TrangThai: "Đã đủ"
   },
   {
     MaWO: "WO-CABLE-003",
-    MaSP: "PAL-WO-1111",
-    TenSP: "Pallet gỗ 1100x1100mm đóng hàng",
+    NgayTao: "2026-11-24 13:15:00",
+    GhiChu: "Cấp cho tổ đóng pallet xuất cảng",
+    items: [
+      {
+        MaSP: "PAL-WO-1111",
+        TenSP: "Pallet gỗ 1100x1100mm đóng hàng",
+        SoLuongYeuCau: 20,
+        SoLuongDaPhat: 0,
+        SoLuongConLai: 20,
+        TrangThai: "Chưa cấp phát"
+      }
+    ],
     SoLuongYeuCau: 20,
     SoLuongDaPhat: 0,
     SoLuongConLai: 20,
-    TrangThai: "Chưa cấp phát",
-    NgayTao: "2026-11-24 13:15:00",
-    GhiChu: "Cấp cho tổ đóng pallet xuất cảng"
+    TrangThai: "Chưa cấp phát"
   }
 ];
 
@@ -660,7 +700,7 @@ async function loadDataFromSheets() {
 
     if (data.success) {
       state.sanPham = data.sanPham || [];
-      state.workOrders = data.workOrders || [];
+      state.workOrders = normalizeWorkOrders(data.workOrders || []);
       state.lichSu = data.lichSu || [];
       state.users = data.users || [];
       renderAllViews();
@@ -705,7 +745,7 @@ function renderDashboard() {
     .filter(i => (i.DanhMuc || '').includes('Spool'))
     .reduce((sum, item) => sum + (Number(item.SoLuongTon) || 0), 0);
 
-  const activeWOCount = state.workOrders.filter(w => (w.SoLuongDaPhat < w.SoLuongYeuCau)).length;
+  const activeWOCount = state.workOrders.filter(w => (Number(w.SoLuongConLai) || 0) > 0).length;
 
   document.getElementById('stat-stock-box').textContent = boxStock.toLocaleString('vi-VN');
   document.getElementById('stat-stock-pallet').textContent = palletStock.toLocaleString('vi-VN');
@@ -851,7 +891,85 @@ function renderInventory(items = state.sanPham) {
   lucide.createIcons();
 }
 
-// 3. WORK ORDER (WO) RENDERING & LOGIC
+// 3. WORK ORDER (WO) RENDERING & LOGIC (Hỗ trợ 1 WO nhiều vật tư: Thùng, Spool, Pallet)
+function normalizeWorkOrders(rawList) {
+  if (!Array.isArray(rawList)) return [];
+  const map = new Map();
+
+  rawList.forEach(entry => {
+    if (!entry || !entry.MaWO) return;
+    const key = String(entry.MaWO).trim().toUpperCase();
+
+    // Nếu backend đã trả về dạng grouped có mảng items
+    if (Array.isArray(entry.items)) {
+      const items = entry.items.map(it => {
+        const req = Number(it.SoLuongYeuCau) || 0;
+        const iss = Number(it.SoLuongDaPhat) || 0;
+        const rem = Math.max(0, req - iss);
+        return {
+          MaSP: String(it.MaSP || '').trim(),
+          TenSP: String(it.TenSP || ''),
+          SoLuongYeuCau: req,
+          SoLuongDaPhat: iss,
+          SoLuongConLai: rem,
+          TrangThai: rem === 0 ? 'Đã đủ' : (iss > 0 ? 'Đang cấp phát' : 'Chưa cấp phát')
+        };
+      });
+      const totalReq = items.reduce((s, i) => s + i.SoLuongYeuCau, 0);
+      const totalIss = items.reduce((s, i) => s + i.SoLuongDaPhat, 0);
+      const totalRem = items.reduce((s, i) => s + i.SoLuongConLai, 0);
+      map.set(key, {
+        MaWO: String(entry.MaWO).trim(),
+        NgayTao: entry.NgayTao || '',
+        GhiChu: entry.GhiChu || '',
+        items,
+        SoLuongYeuCau: totalReq,
+        SoLuongDaPhat: totalIss,
+        SoLuongConLai: totalRem,
+        TrangThai: totalRem === 0 && items.length > 0 ? 'Đã đủ' : (totalIss > 0 ? 'Đang cấp phát' : 'Chưa cấp phát')
+      });
+      return;
+    }
+
+    // Fallback nếu backend cũ trả về từng dòng phẳng
+    const req = Number(entry.SoLuongYeuCau) || 0;
+    const iss = Number(entry.SoLuongDaPhat) || 0;
+    const rem = Math.max(0, req - iss);
+    if (!map.has(key)) {
+      map.set(key, {
+        MaWO: String(entry.MaWO).trim(),
+        NgayTao: entry.NgayTao || '',
+        GhiChu: entry.GhiChu || '',
+        items: [],
+        SoLuongYeuCau: 0,
+        SoLuongDaPhat: 0,
+        SoLuongConLai: 0,
+        TrangThai: 'Chưa cấp phát'
+      });
+    }
+    const wo = map.get(key);
+    wo.items.push({
+      MaSP: String(entry.MaSP || '').trim(),
+      TenSP: String(entry.TenSP || ''),
+      SoLuongYeuCau: req,
+      SoLuongDaPhat: iss,
+      SoLuongConLai: rem,
+      TrangThai: rem === 0 ? 'Đã đủ' : (iss > 0 ? 'Đang cấp phát' : 'Chưa cấp phát')
+    });
+    wo.SoLuongYeuCau += req;
+    wo.SoLuongDaPhat += iss;
+    wo.SoLuongConLai += rem;
+    wo.TrangThai = wo.SoLuongConLai === 0 ? 'Đã đủ' : (wo.SoLuongDaPhat > 0 ? 'Đang cấp phát' : 'Chưa cấp phát');
+  });
+
+  return Array.from(map.values());
+}
+
+function getWOItemCategoryLabel(maSP) {
+  const sp = state.sanPham.find(i => i.MaSP.toUpperCase() === String(maSP || '').toUpperCase());
+  return sp ? sp.DanhMuc : '';
+}
+
 function renderWorkOrders() {
   const container = document.getElementById('wo-cards-grid');
   container.innerHTML = '';
@@ -862,36 +980,65 @@ function renderWorkOrders() {
   }
 
   state.workOrders.forEach(wo => {
+    const items = Array.isArray(wo.items) ? wo.items : [];
     const req = Number(wo.SoLuongYeuCau) || 0;
     const iss = Number(wo.SoLuongDaPhat) || 0;
     const rem = Math.max(0, req - iss);
     const pct = req > 0 ? Math.min(100, Math.round((iss / req) * 100)) : 0;
-    const isCompleted = rem === 0;
+    const isCompleted = rem === 0 && items.length > 0;
+
+    const itemsHtml = items.map(it => {
+      const iReq = Number(it.SoLuongYeuCau) || 0;
+      const iIss = Number(it.SoLuongDaPhat) || 0;
+      const iRem = Math.max(0, iReq - iIss);
+      const iPct = iReq > 0 ? Math.min(100, Math.round((iIss / iReq) * 100)) : 0;
+      const iDone = iRem === 0;
+      const cat = getWOItemCategoryLabel(it.MaSP);
+
+      return `
+        <div class="p-2.5 rounded-xl border ${iDone ? 'bg-emerald-50/40 border-emerald-200/70' : 'bg-slate-50 border-slate-200/70'} space-y-1.5">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                ${cat ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">${cat}</span>` : ''}
+                <span class="text-[11px] font-mono font-bold text-slate-600">${it.MaSP}</span>
+              </div>
+              <p class="text-xs font-bold text-slate-800 truncate mt-0.5" title="${it.TenSP}">${it.TenSP || it.MaSP}</p>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${iDone ? 'bg-emerald-100 text-emerald-700' : (iIss > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600')}">
+              ${iDone ? 'Đủ' : `Thiếu ${iRem}`}
+            </span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] font-semibold">
+            <span class="text-slate-500">Định mức: <b class="text-slate-800">${iReq}</b></span>
+            <span class="text-blue-600">Đã phát: <b>${iIss}</b></span>
+            <span class="${iDone ? 'text-emerald-600' : 'text-rose-600'}">Còn: <b>${iRem}</b></span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-200/70 rounded-full overflow-hidden">
+            <div class="h-full ${iDone ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full transition-all duration-300" style="width: ${iPct}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
 
     const card = document.createElement('div');
-    card.className = `p-5 rounded-2xl border transition-all ${isCompleted ? 'bg-slate-50/70 border-slate-200' : 'bg-white border-amber-200 shadow-sm hover:shadow-md'}`;
+    card.className = `p-5 rounded-2xl border transition-all flex flex-col justify-between ${isCompleted ? 'bg-slate-50/70 border-slate-200' : 'bg-white border-amber-200 shadow-sm hover:shadow-md'}`;
     card.innerHTML = `
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs font-mono font-extrabold px-2.5 py-1 rounded-lg ${isCompleted ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-900'}">${wo.MaWO}</span>
-        <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${isCompleted ? 'bg-emerald-100 text-emerald-800' : (iss > 0 ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')}">
-          ${isCompleted ? '✓ Đã nhận đủ' : (iss > 0 ? `Đang phát (${pct}%)` : 'Chưa phát')}
-        </span>
-      </div>
-
-      <div class="space-y-1 mb-3">
-        <h4 class="font-bold text-slate-800 text-sm truncate" title="${wo.TenSP}">${wo.TenSP}</h4>
-        <p class="text-xs text-slate-500 font-mono">Mã vật tư: ${wo.MaSP}</p>
-        ${wo.GhiChu ? `<p class="text-xs text-slate-400 truncate">${wo.GhiChu}</p>` : ''}
-      </div>
-
-      <div class="space-y-1.5 mb-4">
-        <div class="flex items-center justify-between text-xs font-semibold">
-          <span class="text-slate-500">Định mức: <b class="text-slate-800">${req}</b></span>
-          <span class="text-blue-600">Đã phát: <b>${iss}</b></span>
-          <span class="${isCompleted ? 'text-emerald-600' : 'text-rose-600'}">Còn thiếu: <b>${rem}</b></span>
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono font-extrabold px-2.5 py-1 rounded-lg ${isCompleted ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-900'}">${wo.MaWO}</span>
+            <span class="text-[11px] font-semibold text-slate-500">${items.length} vật tư</span>
+          </div>
+          <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${isCompleted ? 'bg-emerald-100 text-emerald-800' : (iss > 0 ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')}">
+            ${isCompleted ? '✓ Đã nhận đủ' : (iss > 0 ? `Đang phát (${pct}%)` : 'Chưa phát')}
+          </span>
         </div>
-        <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-          <div class="h-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+
+        ${wo.GhiChu ? `<p class="text-xs text-slate-500 mb-3 truncate" title="${wo.GhiChu}">${wo.GhiChu}</p>` : '<div class="mb-2"></div>'}
+
+        <div class="space-y-2 mb-4 max-h-64 overflow-y-auto pr-0.5">
+          ${itemsHtml}
         </div>
       </div>
 
@@ -921,34 +1068,168 @@ function dispatchToWO(maWO) {
   document.getElementById('trans-quantity').focus();
 }
 
-function renderTransactionSelects() {
+function populateTransProductSelect(woItems = null) {
   const spSelect = document.getElementById('trans-product-select');
-  const newWoSpSelect = document.getElementById('new-wo-product-select');
+  const prevValue = spSelect.value;
   spSelect.innerHTML = '<option value="">-- Chọn Thùng / Pallet / Spool --</option>';
-  newWoSpSelect.innerHTML = '<option value="">-- Chọn Thùng / Pallet / Spool --</option>';
 
-  state.sanPham.forEach(item => {
-    const opt = document.createElement('option');
-    opt.value = item.MaSP;
-    opt.textContent = `[${item.DanhMuc}] ${item.TenSP} (${item.MaSP}) - Còn: ${item.SoLuongTon}`;
-    spSelect.appendChild(opt);
+  if (Array.isArray(woItems) && woItems.length > 0) {
+    woItems.forEach(wItem => {
+      const sp = state.sanPham.find(i => i.MaSP.toUpperCase() === wItem.MaSP.toUpperCase());
+      const tonText = sp ? `Tồn: ${sp.SoLuongTon}` : 'Chưa có tồn';
+      const catText = sp ? `[${sp.DanhMuc}] ` : '';
+      const statusText = wItem.SoLuongConLai <= 0 ? 'ĐÃ ĐỦ' : `WO thiếu: ${wItem.SoLuongConLai}`;
+      const opt = document.createElement('option');
+      opt.value = sp ? sp.MaSP : wItem.MaSP;
+      opt.textContent = `${catText}${wItem.TenSP || wItem.MaSP} (${wItem.MaSP}) - ${tonText} | ${statusText}`;
+      spSelect.appendChild(opt);
+    });
+  } else {
+    state.sanPham.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.MaSP;
+      opt.textContent = `[${item.DanhMuc}] ${item.TenSP} (${item.MaSP}) - Còn: ${item.SoLuongTon}`;
+      spSelect.appendChild(opt);
+    });
+  }
 
-    const opt2 = document.createElement('option');
-    opt2.value = item.MaSP;
-    opt2.textContent = `[${item.DanhMuc}] ${item.TenSP} (${item.MaSP})`;
-    newWoSpSelect.appendChild(opt2);
-  });
+  if (prevValue && Array.from(spSelect.options).some(o => o.value === prevValue)) {
+    spSelect.value = prevValue;
+  }
+}
+
+function renderTransactionSelects() {
+  populateTransProductSelect();
 
   const woSelect = document.getElementById('trans-wo-select');
+  const prevWO = woSelect.value;
   woSelect.innerHTML = '<option value="">-- Xuất lẻ tự do (Không theo WO) --</option>';
 
   state.workOrders.forEach(w => {
-    const isCompleted = w.SoLuongConLai <= 0;
+    const items = Array.isArray(w.items) ? w.items : [];
+    const isCompleted = w.SoLuongConLai <= 0 && items.length > 0;
+    const summaryNames = items.map(i => i.MaSP).join(', ');
     const opt = document.createElement('option');
     opt.value = w.MaWO;
-    opt.textContent = `${w.MaWO} - ${w.TenSP} (Đã phát: ${w.SoLuongDaPhat}/${w.SoLuongYeuCau}${isCompleted ? ' - ĐÃ ĐỦ' : ''})`;
+    opt.textContent = `${w.MaWO} (${items.length} vật tư: ${summaryNames}) - ${w.SoLuongDaPhat}/${w.SoLuongYeuCau}${isCompleted ? ' - ĐÃ ĐỦ' : ''}`;
     woSelect.appendChild(opt);
   });
+
+  if (prevWO && Array.from(woSelect.options).some(o => o.value === prevWO)) {
+    woSelect.value = prevWO;
+  }
+}
+
+function selectWOItemInTrans(maSP) {
+  const spSelect = document.getElementById('trans-product-select');
+  spSelect.value = maSP;
+  onSelectTransProduct();
+  document.getElementById('trans-quantity').focus();
+}
+
+function renderWOStatusCard(wo, selectedMaSP) {
+  const itemsListEl = document.getElementById('wo-card-items-list');
+  const noteEl = document.getElementById('wo-card-note');
+  if (wo.GhiChu) {
+    noteEl.textContent = wo.GhiChu;
+    noteEl.classList.remove('hidden');
+  } else {
+    noteEl.classList.add('hidden');
+  }
+
+  const items = Array.isArray(wo.items) ? wo.items : [];
+  itemsListEl.innerHTML = items.map(it => {
+    const isSelected = selectedMaSP && it.MaSP.toUpperCase() === selectedMaSP.toUpperCase();
+    const isDone = it.SoLuongConLai <= 0;
+    const pct = it.SoLuongYeuCau > 0 ? Math.min(100, Math.round((it.SoLuongDaPhat / it.SoLuongYeuCau) * 100)) : 0;
+    const cat = getWOItemCategoryLabel(it.MaSP);
+
+    return `
+      <div onclick="selectWOItemInTrans('${it.MaSP}')" class="cursor-pointer p-2 rounded-lg border transition ${isSelected ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-400' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <span class="text-[10px] font-mono font-bold text-slate-600">${cat ? `[${cat}] ` : ''}${it.MaSP}</span>
+            <p class="text-[11px] font-bold text-slate-800 truncate">${it.TenSP || it.MaSP}</p>
+          </div>
+          <span class="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDone ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">
+            ${isDone ? 'ĐÃ ĐỦ' : `Thiếu ${it.SoLuongConLai}`}
+          </span>
+        </div>
+        <div class="flex items-center justify-between text-[10px] font-semibold mt-1 text-slate-500">
+          <span>Định mức: <b class="text-slate-800">${it.SoLuongYeuCau}</b></span>
+          <span class="text-blue-600">Đã phát: <b>${it.SoLuongDaPhat}</b></span>
+          <span>${pct}%</span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
+          <div class="h-full ${isDone ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full" style="width: ${pct}%"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateSelectedWOItemConstraints() {
+  const maWO = document.getElementById('trans-wo-select').value;
+  if (!maWO || state.transType !== 'XUAT') return;
+
+  const wo = state.workOrders.find(w => w.MaWO.toUpperCase() === maWO.toUpperCase());
+  if (!wo) return;
+
+  const warning = document.getElementById('wo-card-full-warning');
+  const submitBtn = document.getElementById('btn-submit-trans');
+  const submitText = document.getElementById('trans-submit-text');
+  const qtyLimitHint = document.getElementById('trans-qty-limit-hint');
+  const qtyInput = document.getElementById('trans-quantity');
+  const selectedMaSP = document.getElementById('trans-product-select').value;
+
+  renderWOStatusCard(wo, selectedMaSP);
+
+  if (wo.SoLuongConLai <= 0) {
+    warning.classList.remove('hidden');
+    document.getElementById('wo-card-badge').className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
+    document.getElementById('wo-card-badge').textContent = 'ĐÃ NHẬN ĐỦ';
+    qtyLimitHint.textContent = '⛔ WO đã nhận đủ toàn bộ định mức, không được phát thêm!';
+    qtyInput.value = '';
+    qtyInput.disabled = true;
+    submitBtn.disabled = true;
+    submitBtn.className = 'w-full py-3 rounded-xl bg-slate-300 text-slate-500 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2';
+    submitText.textContent = '⛔ Đã nhận đủ định mức (Chặn phát thêm)';
+    return;
+  }
+
+  document.getElementById('wo-card-badge').className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800';
+  document.getElementById('wo-card-badge').textContent = `Còn thiếu ${wo.SoLuongConLai}`;
+
+  const woItem = (wo.items || []).find(i => i.MaSP.toUpperCase() === selectedMaSP.toUpperCase());
+  if (!woItem) {
+    warning.classList.add('hidden');
+    qtyInput.disabled = false;
+    qtyInput.removeAttribute('max');
+    qtyLimitHint.textContent = 'Chọn vật tư trong danh sách WO để kiểm tra định mức.';
+    submitBtn.disabled = false;
+    submitBtn.className = 'w-full py-3 rounded-xl bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2';
+    submitText.textContent = `Xác nhận Xuất kho cho ${wo.MaWO} (-)`;
+    return;
+  }
+
+  if (woItem.SoLuongConLai <= 0) {
+    warning.classList.remove('hidden');
+    qtyLimitHint.textContent = `⛔ Vật tư [${woItem.MaSP}] đã nhận đủ (${woItem.SoLuongDaPhat}/${woItem.SoLuongYeuCau}), hãy chọn vật tư khác trong WO!`;
+    qtyInput.value = '';
+    qtyInput.disabled = true;
+    submitBtn.disabled = true;
+    submitBtn.className = 'w-full py-3 rounded-xl bg-slate-300 text-slate-500 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2';
+    submitText.textContent = `⛔ [${woItem.MaSP}] đã đủ định mức`;
+  } else {
+    warning.classList.add('hidden');
+    qtyInput.disabled = false;
+    qtyInput.max = woItem.SoLuongConLai;
+    qtyLimitHint.textContent = `(Tối đa được phát thêm cho ${woItem.MaSP}: ${woItem.SoLuongConLai})`;
+    submitBtn.disabled = false;
+    submitBtn.className = 'w-full py-3 rounded-xl bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2';
+    submitText.textContent = `Xác nhận Xuất kho cho ${wo.MaWO} (-)`;
+    validateTransactionQuantity();
+  }
 }
 
 function onSelectWorkOrder() {
@@ -964,11 +1245,14 @@ function onSelectWorkOrder() {
   if (!maWO) {
     card.classList.add('hidden');
     warning.classList.add('hidden');
+    populateTransProductSelect(null);
     qtyLimitHint.textContent = '';
+    qtyInput.disabled = false;
     qtyInput.removeAttribute('max');
     submitBtn.disabled = false;
     submitBtn.className = 'w-full py-3 rounded-xl bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2';
     submitText.textContent = 'Xác nhận Xuất kho (-)';
+    onSelectTransProduct();
     return;
   }
 
@@ -977,43 +1261,20 @@ function onSelectWorkOrder() {
 
   card.classList.remove('hidden');
   document.getElementById('wo-card-id').textContent = wo.MaWO;
-  document.getElementById('wo-card-product').textContent = `Vật tư cấp: [${wo.MaSP}] ${wo.TenSP}`;
-  document.getElementById('wo-card-required').textContent = wo.SoLuongYeuCau;
-  document.getElementById('wo-card-issued').textContent = wo.SoLuongDaPhat;
-  document.getElementById('wo-card-remaining').textContent = wo.SoLuongConLai;
 
-  const pct = wo.SoLuongYeuCau > 0 ? Math.min(100, Math.round((wo.SoLuongDaPhat / wo.SoLuongYeuCau) * 100)) : 0;
-  document.getElementById('wo-card-progress').style.width = `${pct}%`;
+  const items = Array.isArray(wo.items) ? wo.items : [];
+  populateTransProductSelect(items);
 
-  spSelect.value = wo.MaSP;
-  onSelectTransProduct();
-
-  // CHẶN PHÁT THÊM NẾU ĐÃ NHẬN ĐỦ SỐ LƯỢNG (100%)
-  if (wo.SoLuongConLai <= 0) {
-    warning.classList.remove('hidden');
-    document.getElementById('wo-card-badge').className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
-    document.getElementById('wo-card-badge').textContent = 'ĐÃ NHẬN ĐỦ';
-    
-    qtyLimitHint.textContent = '⛔ WO đã nhận đủ số lượng, không được phát thêm!';
-    qtyInput.value = '';
-    qtyInput.disabled = true;
-
-    submitBtn.disabled = true;
-    submitBtn.className = 'w-full py-3 rounded-xl bg-slate-300 text-slate-500 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2';
-    submitText.textContent = '⛔ Đã nhận đủ định mức (Chặn phát thêm)';
-  } else {
-    warning.classList.add('hidden');
-    document.getElementById('wo-card-badge').className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800';
-    document.getElementById('wo-card-badge').textContent = `Còn thiếu ${wo.SoLuongConLai}`;
-
-    qtyInput.disabled = false;
-    qtyInput.max = wo.SoLuongConLai;
-    qtyLimitHint.textContent = `(Tối đa được phát thêm: ${wo.SoLuongConLai})`;
-
-    submitBtn.disabled = false;
-    submitBtn.className = 'w-full py-3 rounded-xl bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2';
-    submitText.textContent = `Xác nhận Xuất kho cho ${wo.MaWO} (-)`;
+  // Giữ vật tư đang chọn nếu thuộc WO, ngược lại tự chọn vật tư còn thiếu đầu tiên
+  const currentInWO = items.find(i => i.MaSP.toUpperCase() === spSelect.value.toUpperCase());
+  if (!currentInWO) {
+    const firstPending = items.find(i => i.SoLuongConLai > 0) || items[0];
+    if (firstPending) {
+      spSelect.value = firstPending.MaSP;
+    }
   }
+
+  onSelectTransProduct();
 }
 
 function validateTransactionQuantity() {
@@ -1023,28 +1284,68 @@ function validateTransactionQuantity() {
   const wo = state.workOrders.find(w => w.MaWO.toUpperCase() === maWO.toUpperCase());
   if (!wo) return;
 
+  const maSP = document.getElementById('trans-product-select').value;
+  const woItem = (wo.items || []).find(i => i.MaSP.toUpperCase() === maSP.toUpperCase());
+  if (!woItem) return;
+
   const qty = Number(document.getElementById('trans-quantity').value);
   const hint = document.getElementById('trans-qty-limit-hint');
   const submitBtn = document.getElementById('btn-submit-trans');
 
-  if (qty > wo.SoLuongConLai) {
-    hint.textContent = `⚠️ Quá định mức! WO này chỉ còn thiếu tối đa ${wo.SoLuongConLai}`;
+  if (qty > woItem.SoLuongConLai) {
+    hint.textContent = `⚠️ Quá định mức! [${woItem.MaSP}] chỉ còn thiếu tối đa ${woItem.SoLuongConLai}`;
     submitBtn.disabled = true;
     submitBtn.classList.add('opacity-50');
   } else {
-    hint.textContent = `(Hợp lệ. Tối đa còn thiếu: ${wo.SoLuongConLai})`;
+    hint.textContent = `(Hợp lệ. [${woItem.MaSP}] còn thiếu: ${woItem.SoLuongConLai})`;
     submitBtn.disabled = false;
     submitBtn.classList.remove('opacity-50');
   }
 }
 
-// 4. TẠO WORK ORDER MỚI
+// 4. TẠO WORK ORDER MỚI (NHIỀU VẬT TƯ: THÙNG, SPOOL, PALLET)
+function addNewWOItemRow(presetMaSP = '', presetQty = '') {
+  const container = document.getElementById('new-wo-items-container');
+  const row = document.createElement('div');
+  row.className = 'new-wo-item-row flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200';
+
+  const optionsHtml = ['<option value="">-- Chọn Thùng / Pallet / Spool --</option>']
+    .concat(state.sanPham.map(item =>
+      `<option value="${item.MaSP}" ${item.MaSP === presetMaSP ? 'selected' : ''}>[${item.DanhMuc}] ${item.TenSP} (${item.MaSP})</option>`
+    )).join('');
+
+  row.innerHTML = `
+    <select required class="new-wo-item-select flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-amber-500">
+      ${optionsHtml}
+    </select>
+    <input type="number" min="1" required value="${presetQty}" placeholder="SL" class="new-wo-item-qty w-20 px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-bold text-center focus:ring-2 focus:ring-amber-500 bg-white">
+    <button type="button" onclick="removeNewWOItemRow(this)" title="Xóa dòng" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition shrink-0">
+      <i data-lucide="trash-2" class="w-4 h-4"></i>
+    </button>
+  `;
+  container.appendChild(row);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function removeNewWOItemRow(btn) {
+  const container = document.getElementById('new-wo-items-container');
+  if (container.querySelectorAll('.new-wo-item-row').length <= 1) {
+    Swal.fire({ toast: true, icon: 'info', title: 'Mỗi WO phải có ít nhất 1 vật tư', timer: 1800, position: 'top' });
+    return;
+  }
+  btn.closest('.new-wo-item-row').remove();
+}
+
 function openAddWOModal() {
   const role = state.currentUser ? (state.currentUser.VaiTro || '').toUpperCase() : 'NHAN_VIEN';
   if (role !== 'ADMIN' && role !== 'THU_KHO') {
     Swal.fire('Hạn chế quyền', 'Chỉ Quản trị viên và Thủ kho mới có quyền tạo Lệnh Work Order mới!', 'info');
     return;
   }
+  document.getElementById('form-add-wo').reset();
+  const container = document.getElementById('new-wo-items-container');
+  container.innerHTML = '';
+  addNewWOItemRow();
   document.getElementById('modal-add-wo').classList.remove('hidden');
   lucide.createIcons();
 }
@@ -1057,12 +1358,28 @@ async function submitNewWorkOrder(e) {
   e.preventDefault();
 
   const maWO = document.getElementById('new-wo-id').value.trim().toUpperCase();
-  const maSP = document.getElementById('new-wo-product-select').value;
-  const qty = Number(document.getElementById('new-wo-qty').value);
   const note = document.getElementById('new-wo-note').value.trim();
+  const rows = Array.from(document.querySelectorAll('#new-wo-items-container .new-wo-item-row'));
 
-  if (!maWO || !maSP || isNaN(qty) || qty <= 0) {
-    Swal.fire('Lỗi', 'Vui lòng điền đầy đủ Mã WO, Vật tư và Định mức hợp lệ!', 'warning');
+  const items = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const maSP = row.querySelector('.new-wo-item-select').value;
+    const qty = Number(row.querySelector('.new-wo-item-qty').value);
+    if (!maSP || isNaN(qty) || qty <= 0) {
+      Swal.fire('Lỗi', 'Vui lòng chọn đầy đủ vật tư và nhập số lượng > 0 cho từng dòng!', 'warning');
+      return;
+    }
+    if (seen.has(maSP.toUpperCase())) {
+      Swal.fire('Trùng vật tư', `Mã [${maSP}] đang bị chọn lặp lại trong cùng một WO!`, 'warning');
+      return;
+    }
+    seen.add(maSP.toUpperCase());
+    items.push({ MaSP: maSP, SoLuongYeuCau: qty });
+  }
+
+  if (!maWO || items.length === 0) {
+    Swal.fire('Lỗi', 'Vui lòng nhập Mã WO và ít nhất 1 vật tư!', 'warning');
     return;
   }
 
@@ -1080,8 +1397,7 @@ async function submitNewWorkOrder(e) {
         body: JSON.stringify({
           action: 'them_work_order',
           MaWO: maWO,
-          MaSP: maSP,
-          SoLuongYeuCau: qty,
+          Items: items,
           GhiChu: note
         })
       });
@@ -1092,22 +1408,36 @@ async function submitNewWorkOrder(e) {
       }
       await loadDataFromSheets();
     } else {
-      const sp = state.sanPham.find(i => i.MaSP === maSP);
+      if (state.workOrders.some(w => w.MaWO.toUpperCase() === maWO)) {
+        Swal.fire('Lỗi', `Mã Work Order ${maWO} đã tồn tại!`, 'error');
+        return;
+      }
+      const woItems = items.map(it => {
+        const sp = state.sanPham.find(i => i.MaSP === it.MaSP);
+        return {
+          MaSP: it.MaSP,
+          TenSP: sp ? sp.TenSP : it.MaSP,
+          SoLuongYeuCau: it.SoLuongYeuCau,
+          SoLuongDaPhat: 0,
+          SoLuongConLai: it.SoLuongYeuCau,
+          TrangThai: 'Chưa cấp phát'
+        };
+      });
+      const totalReq = woItems.reduce((s, i) => s + i.SoLuongYeuCau, 0);
       state.workOrders.unshift({
         MaWO: maWO,
-        MaSP: maSP,
-        TenSP: sp ? sp.TenSP : maSP,
-        SoLuongYeuCau: qty,
-        SoLuongDaPhat: 0,
-        SoLuongConLai: qty,
-        TrangThai: 'Chưa cấp phát',
         NgayTao: new Date().toLocaleString('vi-VN'),
-        GhiChu: note
+        GhiChu: note,
+        items: woItems,
+        SoLuongYeuCau: totalReq,
+        SoLuongDaPhat: 0,
+        SoLuongConLai: totalReq,
+        TrangThai: 'Chưa cấp phát'
       });
       renderAllViews();
     }
 
-    Swal.fire('Thành công', `Đã tạo Lệnh Work Order [${maWO}] định mức ${qty}!`, 'success');
+    Swal.fire('Thành công', `Đã tạo Lệnh Work Order [${maWO}] gồm ${items.length} loại vật tư!`, 'success');
     closeAddWOModal();
     document.getElementById('form-add-wo').reset();
     switchTab('workorder');
@@ -1155,6 +1485,8 @@ function onSelectTransProduct() {
   } else {
     infoEl.textContent = '';
   }
+
+  updateSelectedWOItemConstraints();
 }
 
 function quickAction(maSP) {
@@ -1191,15 +1523,32 @@ async function submitTransaction(e) {
         Swal.fire({
           icon: 'error',
           title: 'Chặn phát hàng',
-          text: `⛔ Lệnh ${wo.MaWO} đã nhận ĐỦ định mức (${wo.SoLuongDaPhat}/${wo.SoLuongYeuCau})! Không được phép phát thêm!`
+          text: `⛔ Lệnh ${wo.MaWO} đã nhận ĐỦ toàn bộ định mức! Không được phép phát thêm!`
         });
         return;
       }
-      if (soLuong > wo.SoLuongConLai) {
+      const woItem = (wo.items || []).find(i => i.MaSP.toUpperCase() === maSP.toUpperCase());
+      if (!woItem) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Sai vật tư',
+          text: `Vật tư [${maSP}] không nằm trong danh sách định mức của lệnh ${wo.MaWO}!`
+        });
+        return;
+      }
+      if (woItem.SoLuongConLai <= 0) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Chặn phát hàng',
+          text: `⛔ Vật tư [${maSP}] trong lệnh ${wo.MaWO} đã nhận ĐỦ định mức (${woItem.SoLuongDaPhat}/${woItem.SoLuongYeuCau})!`
+        });
+        return;
+      }
+      if (soLuong > woItem.SoLuongConLai) {
         Swal.fire({
           icon: 'warning',
           title: 'Vượt định mức',
-          text: `Số lượng xuất (${soLuong}) vượt quá số lượng còn thiếu của ${wo.MaWO}! Chỉ được phát tối đa: ${wo.SoLuongConLai}`
+          text: `Số lượng xuất (${soLuong}) vượt quá số lượng còn thiếu của [${maSP}] trong ${wo.MaWO}! Chỉ được phát tối đa: ${woItem.SoLuongConLai}`
         });
         return;
       }
@@ -1257,8 +1606,14 @@ async function submitTransaction(e) {
         if (maWO) {
           const wo = state.workOrders.find(w => w.MaWO.toUpperCase() === maWO);
           if (wo) {
-            wo.SoLuongDaPhat += soLuong;
-            wo.SoLuongConLai = Math.max(0, wo.SoLuongYeuCau - wo.SoLuongDaPhat);
+            const woItem = (wo.items || []).find(i => i.MaSP.toUpperCase() === maSP.toUpperCase());
+            if (woItem) {
+              woItem.SoLuongDaPhat += soLuong;
+              woItem.SoLuongConLai = Math.max(0, woItem.SoLuongYeuCau - woItem.SoLuongDaPhat);
+              woItem.TrangThai = woItem.SoLuongConLai === 0 ? "Đã đủ" : "Đang cấp phát";
+            }
+            wo.SoLuongDaPhat = (wo.items || []).reduce((s, i) => s + i.SoLuongDaPhat, 0);
+            wo.SoLuongConLai = (wo.items || []).reduce((s, i) => s + i.SoLuongConLai, 0);
             wo.TrangThai = wo.SoLuongConLai === 0 ? "Đã đủ" : "Đang cấp phát";
           }
         }

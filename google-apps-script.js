@@ -52,6 +52,8 @@ function setupDatabase() {
     sheetWO.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#f59e0b").setFontColor("#ffffff");
     
     sheetWO.appendRow(["WO-CABLE-001", "SPL-WOOD-800", "Spool gỗ Ø800mm quấn cáp điện lực", 30, 10, "Đang cấp phát", new Date(), "Cấp cho Chuyền bọc vỏ cáp số 1"]);
+    sheetWO.appendRow(["WO-CABLE-001", "BOX-305M", "Thùng carton đóng cáp 305m (5 lớp)", 50, 20, "Đang cấp phát", new Date(), "Cấp cho Chuyền bọc vỏ cáp số 1"]);
+    sheetWO.appendRow(["WO-CABLE-001", "PAL-WO-1111", "Pallet gỗ 1100x1100mm đóng hàng", 10, 0, "Chưa cấp phát", new Date(), "Cấp cho Chuyền bọc vỏ cáp số 1"]);
     sheetWO.appendRow(["WO-CABLE-002", "BOX-305M", "Thùng carton đóng cáp 305m", 100, 100, "Đã đủ", new Date(), "Cấp đóng gói đơn hàng dự án (ĐÃ ĐỦ 100/100)"]);
     sheetWO.appendRow(["WO-CABLE-003", "PAL-WO-1111", "Pallet gỗ 1100x1100mm", 20, 0, "Chưa cấp phát", new Date(), "Cấp cho tổ đóng pallet xuất cảng"]);
   }
@@ -104,27 +106,65 @@ function doGet(e) {
         }
       }
       
-      var workOrders = [];
+      var workOrdersMap = {};
+      var workOrdersOrder = [];
       if (woData && woData.length > 1) {
         for (var k = 1; k < woData.length; k++) {
           var w = woData[k];
           if (!w[0]) continue;
+          var maWOKey = String(w[0]).trim().toUpperCase();
+          var maSPItem = String(w[1] || "").trim();
+          var tenSPItem = String(w[2] || "");
           var yeuCau = Number(w[3] || 0);
           var daPhat = Number(w[4] || 0);
-          var trangThai = daPhat >= yeuCau ? "Đã đủ" : (daPhat > 0 ? "Đang cấp phát" : "Chưa cấp phát");
-          
-          workOrders.push({
-            MaWO: String(w[0]),
-            MaSP: String(w[1] || ""),
-            TenSP: String(w[2] || ""),
+          var conLai = Math.max(0, yeuCau - daPhat);
+          var trangThaiItem = daPhat >= yeuCau ? "Đã đủ" : (daPhat > 0 ? "Đang cấp phát" : "Chưa cấp phát");
+          var ngayTaoStr = w[6] ? Utilities.formatDate(new Date(w[6]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : "";
+          var ghiChuStr = String(w[7] || "");
+
+          if (!workOrdersMap[maWOKey]) {
+            workOrdersMap[maWOKey] = {
+              MaWO: String(w[0]).trim(),
+              MaSP: maSPItem,
+              TenSP: tenSPItem,
+              SoLuongYeuCau: 0,
+              SoLuongDaPhat: 0,
+              SoLuongConLai: 0,
+              TrangThai: "Chưa cấp phát",
+              NgayTao: ngayTaoStr,
+              GhiChu: ghiChuStr,
+              items: []
+            };
+            workOrdersOrder.push(maWOKey);
+          }
+
+          var woObj = workOrdersMap[maWOKey];
+          woObj.items.push({
+            MaSP: maSPItem,
+            TenSP: tenSPItem,
             SoLuongYeuCau: yeuCau,
             SoLuongDaPhat: daPhat,
-            SoLuongConLai: Math.max(0, yeuCau - daPhat),
-            TrangThai: trangThai,
-            NgayTao: Utilities.formatDate(new Date(w[6]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
-            GhiChu: String(w[7] || "")
+            SoLuongConLai: conLai,
+            TrangThai: trangThaiItem
           });
+          woObj.SoLuongYeuCau += yeuCau;
+          woObj.SoLuongDaPhat += daPhat;
+          woObj.SoLuongConLai += conLai;
+          if (!woObj.GhiChu && ghiChuStr) woObj.GhiChu = ghiChuStr;
         }
+      }
+
+      var workOrders = [];
+      for (var m = 0; m < workOrdersOrder.length; m++) {
+        var woItem = workOrdersMap[workOrdersOrder[m]];
+        if (woItem.SoLuongConLai <= 0 && woItem.items.length > 0) {
+          woItem.TrangThai = "Đã đủ";
+        } else if (woItem.SoLuongDaPhat > 0) {
+          woItem.TrangThai = "Đang cấp phát";
+        } else {
+          woItem.TrangThai = "Chưa cấp phát";
+        }
+        workOrders.push(woItem);
       }
       
       var lichSu = [];
@@ -413,41 +453,43 @@ function doPost(e) {
         
         if (maWO) {
           var woValues = sheetWO.getDataRange().getValues();
+          var woExists = false;
           var woRowIndex = -1;
           var soLuongYeuCau = 0;
           var soLuongDaPhat = 0;
-          var woMaSP = "";
           
           for (var w = 1; w < woValues.length; w++) {
             if (String(woValues[w][0]).trim().toUpperCase() === maWO) {
-              woRowIndex = w + 1;
-              woMaSP = String(woValues[w][1]).trim().toUpperCase();
-              soLuongYeuCau = Number(woValues[w][3]) || 0;
-              soLuongDaPhat = Number(woValues[w][4]) || 0;
-              break;
+              woExists = true;
+              if (String(woValues[w][1]).trim().toUpperCase() === maSP.toUpperCase()) {
+                woRowIndex = w + 1;
+                soLuongYeuCau = Number(woValues[w][3]) || 0;
+                soLuongDaPhat = Number(woValues[w][4]) || 0;
+                break;
+              }
             }
           }
           
-          if (woRowIndex === -1) {
+          if (!woExists) {
             return responseJSON({ success: false, message: "Không tìm thấy Work Order có mã: " + maWO });
           }
           
-          if (woMaSP !== maSP.toUpperCase()) {
-            return responseJSON({ success: false, message: "Sai vật tư! Lệnh " + maWO + " yêu cầu mã " + woMaSP + ", không phải " + maSP });
+          if (woRowIndex === -1) {
+            return responseJSON({ success: false, message: "Sai vật tư! Mã [" + maSP + "] không có trong định mức của lệnh " + maWO });
           }
           
           var conThieu = soLuongYeuCau - soLuongDaPhat;
           if (conThieu <= 0) {
             return responseJSON({
               success: false,
-              message: "⛔ Lệnh " + maWO + " đã nhận ĐỦ định mức (" + soLuongDaPhat + "/" + soLuongYeuCau + ")! Không được phát thêm."
+              message: "⛔ Vật tư [" + maSP + "] trong lệnh " + maWO + " đã nhận ĐỦ định mức (" + soLuongDaPhat + "/" + soLuongYeuCau + ")! Không được phát thêm."
             });
           }
           
           if (soLuong > conThieu) {
             return responseJSON({
               success: false,
-              message: "Số lượng xuất (" + soLuong + ") vượt định mức còn lại của lệnh " + maWO + "! Chỉ được phát tối đa: " + conThieu
+              message: "Số lượng xuất (" + soLuong + ") vượt định mức còn lại của [" + maSP + "] trong lệnh " + maWO + "! Chỉ được phát tối đa: " + conThieu
             });
           }
           
@@ -544,15 +586,16 @@ function doPost(e) {
       return responseJSON({ success: true, message: "Đã xóa vĩnh viễn mã PN [" + maSP + "] khỏi kho!" });
     }
 
-    // 7. ACTION: THÊM WORK ORDER MỚI
+    // 7. ACTION: THÊM WORK ORDER MỚI (HỖ TRỢ NHIỀU VẬT TƯ: THÙNG, SPOOL, PALLET)
     if (action === "them_work_order") {
       var maWO = String(data.MaWO || "").trim().toUpperCase();
-      var maSP = String(data.MaSP || "").trim().toUpperCase();
-      var soLuong = Number(data.SoLuongYeuCau);
       var ghiChu = data.GhiChu || "";
+      var items = Array.isArray(data.Items) && data.Items.length > 0
+        ? data.Items
+        : [{ MaSP: data.MaSP, SoLuongYeuCau: data.SoLuongYeuCau }];
       
-      if (!maWO || !maSP || isNaN(soLuong) || soLuong <= 0) {
-        return responseJSON({ success: false, message: "Vui lòng nhập đầy đủ Mã WO, Mã vật tư và Số lượng yêu cầu!" });
+      if (!maWO || items.length === 0) {
+        return responseJSON({ success: false, message: "Vui lòng nhập Mã WO và ít nhất 1 vật tư!" });
       }
       
       var woValues = sheetWO.getDataRange().getValues();
@@ -562,17 +605,37 @@ function doPost(e) {
         }
       }
       
-      var tenSP = "";
       var spValues = sheetSP.getDataRange().getValues();
+      var spNameMap = {};
       for (var s = 1; s < spValues.length; s++) {
-        if (String(spValues[s][0]).trim().toUpperCase() === maSP) {
-          tenSP = spValues[s][1];
-          break;
+        var spCode = String(spValues[s][0]).trim().toUpperCase();
+        if (spCode) spNameMap[spCode] = String(spValues[s][1] || "");
+      }
+
+      var seenSP = {};
+      var validRows = [];
+      for (var idx = 0; idx < items.length; idx++) {
+        var itemMaSP = String(items[idx].MaSP || "").trim().toUpperCase();
+        var itemQty = Number(items[idx].SoLuongYeuCau);
+        if (!itemMaSP || isNaN(itemQty) || itemQty <= 0) {
+          return responseJSON({ success: false, message: "Vui lòng chọn đầy đủ vật tư và số lượng > 0 cho từng dòng!" });
         }
+        if (seenSP[itemMaSP]) {
+          return responseJSON({ success: false, message: "Mã vật tư [" + itemMaSP + "] bị trùng lặp trong cùng một WO!" });
+        }
+        seenSP[itemMaSP] = true;
+        validRows.push({
+          maSP: itemMaSP,
+          tenSP: spNameMap[itemMaSP] || itemMaSP,
+          soLuong: itemQty
+        });
       }
       
-      sheetWO.appendRow([maWO, maSP, tenSP, soLuong, 0, "Chưa cấp phát", new Date(), ghiChu]);
-      return responseJSON({ success: true, message: "Tạo Lệnh Work Order " + maWO + " thành công!" });
+      var nowDate = new Date();
+      for (var rIdx = 0; rIdx < validRows.length; rIdx++) {
+        sheetWO.appendRow([maWO, validRows[rIdx].maSP, validRows[rIdx].tenSP, validRows[rIdx].soLuong, 0, "Chưa cấp phát", nowDate, ghiChu]);
+      }
+      return responseJSON({ success: true, message: "Tạo Lệnh Work Order " + maWO + " (" + validRows.length + " vật tư) thành công!" });
     }
     
     // 8. ACTION: THÊM THÙNG / PALLET / SPOOL MỚI
