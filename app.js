@@ -403,7 +403,7 @@ async function handleLogin(e) {
     Swal.fire({
       icon: 'error',
       title: 'Lỗi kết nối máy chủ',
-      html: `Không thể kết nối đến Google Sheets:<br><span class="text-rose-600 font-medium text-xs">${err.message}</span><br><br><small class="text-slate-500">Gợi ý: Kiểm tra xem khi Triển khai trên Apps Script bạn đã chọn <b>"Ai có quyền truy cập: Bất kỳ ai (Anyone)"</b> chưa.</small>`,
+      html: `Không thể kết nối đến Google Sheets:<br><span class="text-rose-600 font-medium text-xs">${err.message}</span>`,
       confirmButtonColor: '#3b82f6',
       confirmButtonText: 'Đóng'
     });
@@ -1197,9 +1197,11 @@ function renderTransactionSelects() {
   state.workOrders.forEach(w => {
     const items = Array.isArray(w.items) ? w.items : [];
     const isCompleted = w.SoLuongConLai <= 0 && items.length > 0;
+    if (isCompleted) return; // Ẩn các WO đã phát đủ hết khỏi danh sách xuất kho
+
     const opt = document.createElement('option');
     opt.value = w.MaWO;
-    opt.textContent = `${w.MaWO} (${items.length} VT • ${w.SoLuongDaPhat}/${w.SoLuongYeuCau}${isCompleted ? ' • ĐỦ' : ''})`;
+    opt.textContent = `${w.MaWO} (${items.length} VT • ${w.SoLuongDaPhat}/${w.SoLuongYeuCau})`;
     woSelect.appendChild(opt);
   });
 
@@ -2275,6 +2277,11 @@ function onScanSuccess(code) {
     const woSelect = document.getElementById('trans-wo-select');
     const matchedWO = state.workOrders.find(w => w.MaWO.toUpperCase() === cleanCode.toUpperCase());
     if (matchedWO) {
+      const items = Array.isArray(matchedWO.items) ? matchedWO.items : [];
+      if (matchedWO.SoLuongConLai <= 0 && items.length > 0) {
+        Swal.fire('Đã đủ định mức', `⛔ Lệnh Work Order [${matchedWO.MaWO}] đã nhận đủ hết vật tư, không thể xuất thêm!`, 'info');
+        return;
+      }
       woSelect.value = matchedWO.MaWO;
       onSelectWorkOrder();
       Swal.fire({ toast: true, icon: 'success', title: `Đã chọn WO: ${matchedWO.MaWO}`, timer: 2000, position: 'top' });
